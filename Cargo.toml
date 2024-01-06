@@ -1,10 +1,7 @@
 [workspace]
 
-members = [
-    "server",
-    "worker",
-    "shared",
-    "complex-rs",
-]
+members = ["server", "worker", "shared", "complex-rs", "cli"]
+
+default-members = ["cli"]
 
 resolver = "2"
