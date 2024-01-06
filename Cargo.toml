@@ -4,5 +4,7 @@ members = [
     "server",
     "worker",
     "shared",
+    "complex-rs",
 ]
 
+resolver = "2"

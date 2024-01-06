@@ -1,11 +1,20 @@
 use crate::models::{
-    fractal::fractal_descriptor::FractalDescriptor, range::Range, resolution::Resolution,
+    fractal::fractal::Fractal,
+    fractal::fractal_descriptor::FractalDescriptor,
+    pixel::{pixel_data::PixelData, pixel_intensity::PixelIntensity},
+    range::Range,
+    resolution::Resolution,
     u8_data::U8Data,
 };
-
+use image::{ImageBuffer, Rgb};
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 
-use super::fragment::Fragment;
+use super::{fragment::Fragment, fragment_result::FragmentResult};
+
+type FragmentResultData = Vec<u8>;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FragmentTask {
     pub id: U8Data,
@@ -13,6 +22,82 @@ pub struct FragmentTask {
     pub max_iteration: u32,
     pub resolution: Resolution,
     pub range: Range,
+}
+
+impl FragmentTask {
+    pub fn perform(
+        &self,
+    ) -> Result<(FragmentResult, FragmentResultData), Box<dyn std::error::Error>> {
+        let (image_buffer, pixel_data) = self.initialize_buffers()?;
+        let data = self.calculate_pixels(image_buffer)?;
+
+        debug!("Calculated pixels for FragmentTask ID: {:?}", self.id);
+        let fragment_result =
+            FragmentResult::new(self.id.clone(), self.resolution, self.range, pixel_data);
+
+        Ok((fragment_result, data))
+    }
+
+    fn initialize_buffers(
+        &self,
+    ) -> Result<(ImageBuffer<Rgb<u8>, Vec<u8>>, PixelData), Box<dyn std::error::Error>> {
+        let width = self.resolution.nx as u32;
+        let height = self.resolution.ny as u32;
+
+        let image_buffer: ImageBuffer<Rgb<u8>, Vec<u8>> = ImageBuffer::new(width, height);
+        let pixel_data = PixelData::new(self.id.count, width * height);
+
+        Ok((image_buffer, pixel_data))
+    }
+
+    fn calculate_pixels(
+        &self,
+        image_buffer: ImageBuffer<Rgb<u8>, Vec<u8>>,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let mut data = Vec::new();
+
+        for (x, y, _pixel) in image_buffer.enumerate_pixels() {
+            let (mapped_x, mapped_y) = self.map_coordinates(x, y);
+            let (zn, count) = self.calculate_fractal(mapped_x, mapped_y);
+
+            let pixel_intensity =
+                PixelIntensity::new(zn as f32, (count as f32) / self.max_iteration as f32);
+
+            data.write_all(&pixel_intensity.zn.to_be_bytes())
+                .map_err(|e| {
+                    error!("Failed to write zn to pixel data: {}", e);
+                    e
+                })?;
+            data.write_all(&pixel_intensity.count.to_be_bytes())
+                .map_err(|e| {
+                    error!("Failed to write count to pixel data: {}", e);
+                    e
+                })?;
+        }
+
+        Ok(data)
+    }
+
+    fn map_coordinates(&self, x: u32, y: u32) -> (f64, f64) {
+        let Range { min, max } = &self.range;
+        let mapped_x = min.x + (x as f64 / self.resolution.nx as f64) * (max.x - min.x);
+        let mapped_y = min.y + (y as f64 / self.resolution.ny as f64) * (max.y - min.y);
+        (mapped_x, mapped_y)
+    }
+
+    fn calculate_fractal(&self, x: f64, y: f64) -> (f64, f64) {
+        match &self.fractal {
+            FractalDescriptor::Julia(julia) => julia.generate(self.max_iteration, x, y),
+            FractalDescriptor::Mandelbrot(mandelbrot) => {
+                mandelbrot.generate(self.max_iteration, x, y)
+            }
+            FractalDescriptor::IteratedSinZ(iterated_sin_z) => {
+                iterated_sin_z.generate(self.max_iteration, x, y)
+            }
+            FractalDescriptor::NewtonRaphsonZ3(_) => todo!(),
+            FractalDescriptor::NewtonRaphsonZ4(_) => todo!(),
+        }
+    }
 }
 
 impl Fragment for FragmentTask {

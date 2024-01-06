@@ -13,6 +13,10 @@ pub struct FragmentResult {
     pub pixels: PixelData,
 }
 
+impl FragmentResult {
+    pub fn new(id: U8Data, resolution: Resolution, range: Range, pixels: PixelData) -> Self { Self { id, resolution, range, pixels } }
+}
+
 impl Fragment for FragmentResult {
     fn to_json(&self) -> Result<serde_json::Value, serde_json::Error> {
         let wrapped = serde_json::json!({ "FragmentResult": self });
