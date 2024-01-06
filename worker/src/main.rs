@@ -8,7 +8,7 @@ use shared::{
         fragment_task::FragmentTask,
     },
     networking::{
-        read_binary_data, read_json_message, read_message_length, send_request, send_result,
+        read_binary_data, read_json_message, read_message_length, send_request, send_result, result::NetworkingResult,
     },
 };
 use tokio::{
@@ -21,6 +21,8 @@ async fn main() {
     env::init();
     logger::init();
 
+    // TODO: maybe add a counter of consecutive errors with a threshold
+    // to detect and shutdown the connection if it is too recurrent
     let handle = tokio::spawn(async move {
         loop {
             if let Err(e) = run().await {
@@ -32,56 +34,29 @@ async fn main() {
     _ = handle.await;
 }
 
-async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let mut stream = conntect_to_server("localhost:8787").await?;
-    send_fragment_request(&mut stream).await?;
-
-    let mut task: FragmentTask;
-    let mut data_message: Vec<u8>;
-    let mut result: FragmentResult;
-    let mut data: Vec<u8>;
-
-    (data_message, task) = match read_fragment_task(&mut stream).await {
-        Ok(value) => value,
-        Err(value) => return value,
-    };
-
-    (result, data) = match perform_task(&task) {
-        Ok(value) => value,
-        Err(value) => return value,
-    };
+async fn run() -> NetworkingResult<()> {
+    let mut stream = connect_to_server("localhost:8787").await?;
 
     loop {
-        let mut inner_stream = conntect_to_server("localhost:8787").await?;
-        send_fragment_result(
-            result.clone(),
-            &mut inner_stream,
-            data.clone(),
-            data_message.clone(),
-        )
-        .await?;
+        send_fragment_request(&mut stream).await?;
+        let (data_message, task) = read_fragment_task(&mut stream).await?;
+        let (result, data) = perform_task(&task)?;
 
-        (data_message, task) = match read_fragment_task(&mut inner_stream).await {
-            Ok(value) => value,
-            Err(value) => return value,
-        };
+        let mut stream = connect_to_server("localhost:8787").await?;
+        send_fragment_result(&result, &mut stream, &data, &data_message).await?;
 
-        (result, data) = match perform_task(&task) {
-            Ok(value) => value,
-            Err(value) => return value,
-        };
-        inner_stream.shutdown().await?;
+        _ = stream.shutdown().await?;
     }
 }
 
 fn perform_task(
     task: &FragmentTask,
-) -> Result<(FragmentResult, Vec<u8>), Result<(), Box<dyn std::error::Error>>> {
+) -> NetworkingResult<(FragmentResult, Vec<u8>)> {
     let (result, data) = match task.perform() {
         Ok((result, data)) => (result, data),
         Err(e) => {
             error!("Failed to perform the FragmentTask: {}", e);
-            return Err(Err(e.into()));
+            return Err(e.into());
         }
     };
     info!("FragmentTask performed successfully");
@@ -90,11 +65,11 @@ fn perform_task(
 }
 
 async fn send_fragment_result(
-    result: FragmentResult,
+    result: &FragmentResult,
     inner_stream: &mut TcpStream,
-    data: Vec<u8>,
-    data_message: Vec<u8>,
-) -> io::Result<()> {
+    data: &Vec<u8>,
+    data_message: &Vec<u8>,
+) -> NetworkingResult<()> {
     let serialized_fragment_result = FragmentResult::to_json(&result)?.to_string();
     debug!("FragmentResult: {}", serialized_fragment_result);
     send_result(
@@ -110,26 +85,26 @@ async fn send_fragment_result(
 
 async fn read_fragment_task(
     mut stream: &mut TcpStream,
-) -> Result<(Vec<u8>, FragmentTask), Result<(), Box<dyn std::error::Error>>> {
+) -> NetworkingResult<(Vec<u8>, FragmentTask)> {
     let message_length = match read_message_length(&mut stream).await {
         Ok(length) => length,
         Err(e) => {
             error!("Failed to read message length: {}", e);
-            return Err(Err(e.into()));
+            return Err(e.into());
         }
     };
     let json_length = match read_message_length(&mut stream).await {
         Ok(length) => length,
         Err(e) => {
             error!("Failed to read json length: {}", e);
-            return Err(Err(e.into()));
+            return Err(e.into());
         }
     };
     let json_message = match read_json_message(&mut stream, json_length as usize).await {
         Ok(json) => json,
         Err(e) => {
             error!("Failed to read JSON message: {}", e);
-            return Err(Err(e.into()));
+            return Err(e.into());
         }
     };
     debug!("Received JSON message: {}", json_message);
@@ -138,7 +113,7 @@ async fn read_fragment_task(
             Ok(data) => data,
             Err(e) => {
                 error!("Failed to read DATA message: {}", e);
-                return Err(Err(e.into()));
+                return Err(e.into());
             }
         };
     debug!("Received DATA message: {:?}", data_message);
@@ -146,7 +121,7 @@ async fn read_fragment_task(
         Ok(task) => task,
         Err(e) => {
             error!("Failed to deserialize JSON into FragmentTask: {}", e);
-            return Err(Err(e.into()));
+            return Err(e.into());
         }
     };
     info!("FragmentTask deserialized successfully");
@@ -154,7 +129,7 @@ async fn read_fragment_task(
     Ok((data_message, task))
 }
 
-async fn send_fragment_request(stream: &mut TcpStream) -> io::Result<()> {
+async fn send_fragment_request(stream: &mut TcpStream) -> NetworkingResult<()> {
     let worker_name = "adia-dev";
     info!("Worker launched: {}", worker_name);
     let request = FragmentRequest::new(worker_name.to_string(), 250).to_json()?;
@@ -172,7 +147,7 @@ async fn send_fragment_request(stream: &mut TcpStream) -> io::Result<()> {
     Ok(())
 }
 
-async fn conntect_to_server(addr: &str) -> Result<TcpStream, io::Error> {
+async fn connect_to_server(addr: &str) -> NetworkingResult<TcpStream> {
     let stream = match TcpStream::connect(addr).await {
         Ok(stream) => stream,
         Err(e) => {

@@ -1,3 +1,6 @@
+pub mod error;
+pub mod result;
+
 use std::io;
 use log::debug;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
