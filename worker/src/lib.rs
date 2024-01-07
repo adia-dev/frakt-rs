@@ -8,16 +8,21 @@ use shared::{
         fragment_task::FragmentTask,
     },
     networking::{
-        read_binary_data, read_json_message, read_message_length, send_request, send_result, result::NetworkingResult,
+        read_binary_data, read_json_message, read_message_length, result::NetworkingResult,
+        send_request, send_result, worker::Worker,
     },
 };
 use tokio::{
-    io::{self, AsyncWriteExt},
+    io::AsyncWriteExt,
     net::TcpStream,
 };
 
-#[tokio::main]
-async fn main() {
+// #[tokio::main]
+// async fn main() {
+//     run_worker().await;
+// }
+
+pub async fn run_worker(worker: Worker) {
     env::init();
     logger::init();
 
@@ -25,7 +30,7 @@ async fn main() {
     // to detect and shutdown the connection if it is too recurrent
     let handle = tokio::spawn(async move {
         loop {
-            if let Err(e) = run().await {
+            if let Err(e) = run(&worker).await {
                 error!("Application error: {}", e);
             }
         }
@@ -34,24 +39,23 @@ async fn main() {
     _ = handle.await;
 }
 
-async fn run() -> NetworkingResult<()> {
-    let mut stream = connect_to_server("localhost:8787").await?;
+async fn run(worker: &Worker) -> NetworkingResult<()> {
+    let server_addr = format!("{}:{}", worker.address, worker.port);
+    let mut stream = connect_to_server(&server_addr).await?;
 
     loop {
-        send_fragment_request(&mut stream).await?;
+        send_fragment_request(&mut stream, &worker).await?;
         let (data_message, task) = read_fragment_task(&mut stream).await?;
         let (result, data) = perform_task(&task)?;
 
-        let mut stream = connect_to_server("localhost:8787").await?;
+        let mut stream = connect_to_server(&server_addr).await?;
         send_fragment_result(&result, &mut stream, &data, &data_message).await?;
 
         _ = stream.shutdown().await?;
     }
 }
 
-fn perform_task(
-    task: &FragmentTask,
-) -> NetworkingResult<(FragmentResult, Vec<u8>)> {
+fn perform_task(task: &FragmentTask) -> NetworkingResult<(FragmentResult, Vec<u8>)> {
     let (result, data) = match task.perform() {
         Ok((result, data)) => (result, data),
         Err(e) => {
@@ -129,10 +133,9 @@ async fn read_fragment_task(
     Ok((data_message, task))
 }
 
-async fn send_fragment_request(stream: &mut TcpStream) -> NetworkingResult<()> {
-    let worker_name = "adia-dev";
-    info!("Worker launched: {}", worker_name);
-    let request = FragmentRequest::new(worker_name.to_string(), 250).to_json()?;
+async fn send_fragment_request(stream: &mut TcpStream, worker: &Worker) -> NetworkingResult<()> {
+    info!("Worker launched: {}", worker.name);
+    let request = FragmentRequest::new(worker.name.to_owned(), worker.maximal_work_load).to_json()?;
     let serialized_fragment_request = serde_json::to_string(&request)?;
     let serialized_fragment_request_bytes = serialized_fragment_request.as_bytes();
     debug!(
