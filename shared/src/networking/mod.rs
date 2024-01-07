@@ -3,8 +3,8 @@ pub mod result;
 pub mod server;
 pub mod worker;
 
-use std::io;
 use log::debug;
+use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 

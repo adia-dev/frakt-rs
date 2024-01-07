@@ -1,5 +1,4 @@
 use clap::Parser;
 
 #[derive(Parser, Debug)]
-pub struct ServerCommand {
-}
+pub struct ServerCommand {}

@@ -1,6 +1,6 @@
-pub mod models;
-pub mod logger;
 pub mod env;
+pub mod logger;
+pub mod models;
 pub mod networking;
 
 pub fn add(left: usize, right: usize) -> usize {

@@ -12,10 +12,7 @@ use shared::{
         send_request, send_result, worker::Worker,
     },
 };
-use tokio::{
-    io::AsyncWriteExt,
-    net::TcpStream,
-};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 // #[tokio::main]
 // async fn main() {
@@ -135,7 +132,8 @@ async fn read_fragment_task(
 
 async fn send_fragment_request(stream: &mut TcpStream, worker: &Worker) -> NetworkingResult<()> {
     info!("Worker launched: {}", worker.name);
-    let request = FragmentRequest::new(worker.name.to_owned(), worker.maximal_work_load).to_json()?;
+    let request =
+        FragmentRequest::new(worker.name.to_owned(), worker.maximal_work_load).to_json()?;
     let serialized_fragment_request = serde_json::to_string(&request)?;
     let serialized_fragment_request_bytes = serialized_fragment_request.as_bytes();
     debug!(

@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PixelData {
     pub offset: u32,
@@ -6,5 +6,7 @@ pub struct PixelData {
 }
 
 impl PixelData {
-    pub fn new(offset: u32, count: u32) -> Self { Self { offset, count } }
+    pub fn new(offset: u32, count: u32) -> Self {
+        Self { offset, count }
+    }
 }

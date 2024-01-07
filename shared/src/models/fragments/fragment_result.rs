@@ -2,7 +2,7 @@ use crate::models::{
     pixel::pixel_data::PixelData, range::Range, resolution::Resolution, u8_data::U8Data,
 };
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use super::fragment::Fragment;
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -14,7 +14,14 @@ pub struct FragmentResult {
 }
 
 impl FragmentResult {
-    pub fn new(id: U8Data, resolution: Resolution, range: Range, pixels: PixelData) -> Self { Self { id, resolution, range, pixels } }
+    pub fn new(id: U8Data, resolution: Resolution, range: Range, pixels: PixelData) -> Self {
+        Self {
+            id,
+            resolution,
+            range,
+            pixels,
+        }
+    }
 }
 
 impl Fragment for FragmentResult {
