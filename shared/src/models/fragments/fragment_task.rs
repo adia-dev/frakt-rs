@@ -25,6 +25,22 @@ pub struct FragmentTask {
 }
 
 impl FragmentTask {
+    pub fn new(
+        id: U8Data,
+        fractal: FractalDescriptor,
+        max_iteration: u32,
+        resolution: Resolution,
+        range: Range,
+    ) -> Self {
+        Self {
+            id,
+            fractal,
+            max_iteration,
+            resolution,
+            range,
+        }
+    }
+
     pub fn perform(
         &self,
     ) -> Result<(FragmentResult, FragmentResultData), Box<dyn std::error::Error>> {

@@ -1,11 +1,10 @@
 use std::fmt;
 
 use colored::Colorize;
-use tokio::io;
 
 #[derive(Debug)]
 pub enum NetworkingError {
-    IoError(io::Error),
+    IoError(std::io::Error),
     JsonError(serde_json::Error),
     Error(Box<dyn std::error::Error>),
 }
@@ -26,8 +25,8 @@ impl fmt::Display for NetworkingError {
     }
 }
 
-impl From<io::Error> for NetworkingError {
-    fn from(err: io::Error) -> NetworkingError {
+impl From<std::io::Error> for NetworkingError {
+    fn from(err: std::io::Error) -> NetworkingError {
         NetworkingError::IoError(err)
     }
 }

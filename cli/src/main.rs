@@ -2,7 +2,7 @@ pub mod commands;
 
 use clap::Parser;
 use commands::Commands;
-use shared::networking::worker::Worker;
+use shared::networking::{worker::Worker, server::Server};
 use uuid::Uuid;
 
 /// Simple program to greet a person
@@ -41,6 +41,19 @@ async fn main() {
             let worker = Worker::new(worker_name, maximal_work_load, address, port);
             worker::run_worker(worker).await;
         }
-        Commands::Server(_) => todo!(), // other command matches...
+        Commands::Server(args) => {
+            let address = match args.address {
+                Some(address) => address,
+                None => "localhost".to_string(),
+            };
+
+            let port = match args.port {
+                Some(port) => port,
+                None => 8787,
+            };
+
+            let server = Server::new(address, port);
+            server::run_server(server).await;
+        }
     }
 }

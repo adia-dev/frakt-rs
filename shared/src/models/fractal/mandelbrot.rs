@@ -6,6 +6,12 @@ use super::fractal::Fractal;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mandelbrot {}
 
+impl Mandelbrot {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
 impl Fractal for Mandelbrot {
     fn generate(&self, max_iterations: u32, x: f64, y: f64) -> (f64, f64) {
         let mut z = Complex::new(0.0, 0.0);
