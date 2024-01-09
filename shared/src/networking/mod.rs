@@ -3,7 +3,6 @@ pub mod result;
 pub mod server;
 pub mod worker;
 
-use log::debug;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -51,15 +50,18 @@ pub async fn read_binary_data(stream: &mut TcpStream, length: usize) -> Networki
 
 // QUESTION: Is this executing a heavy copy to the struct
 // or just transfering the ownership ?
-pub async fn read_message_raw(mut stream: &mut TcpStream) -> NetworkingResult<(RawMessage)>
-{
+pub async fn read_message_raw(mut stream: &mut TcpStream) -> NetworkingResult<RawMessage> {
     let message_length = read_message_length(&mut stream).await?;
     let json_length = read_message_length(&mut stream).await?;
     let json_message = read_json_message(&mut stream, json_length as usize).await?;
-    let data =
-        read_binary_data(&mut stream, (message_length - json_length) as usize).await?;
+    let data = read_binary_data(&mut stream, (message_length - json_length) as usize).await?;
 
-    Ok(RawMessage{message_length, json_length, json_message, data})
+    Ok(RawMessage {
+        message_length,
+        json_length,
+        json_message,
+        data,
+    })
 }
 
 pub async fn read_fragment<T>(mut stream: &mut TcpStream) -> NetworkingResult<(Vec<u8>, T)>
@@ -83,7 +85,6 @@ pub async fn write_json_message(
     let message_bytes = json_message.as_bytes();
     let message_length = message_bytes.len() as u32;
 
-    debug!("json_message_size: {}", message_length);
     // Write the length of the JSON message
     stream.write_u32(message_length).await?;
 
@@ -104,7 +105,6 @@ pub async fn send_result(
     wtf: &[u8],
 ) -> NetworkingResult<()> {
     let total_message_size = (json_message.as_bytes().len() + binary_data.len() + wtf.len()) as u32;
-    debug!("total_message_size: {}", total_message_size);
     stream.write_u32(total_message_size).await?;
     stream.flush().await?;
 

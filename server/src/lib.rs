@@ -1,7 +1,6 @@
 pub mod metrics;
 pub mod server_state;
 
-use core::panic;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -49,9 +48,9 @@ async fn run(server: &Server) -> NetworkingResult<()> {
     let server_addr = format!("{}:{}", server.address, server.port);
     let listener = start_server(&server_addr).await?;
 
-    info!("Server listening on {}:{}", server.address, server.port);
+    info!("Server listening on {}", server_addr);
 
-    let (tx, mut rx) = mpsc::channel(32);
+    let (tx, _) = mpsc::channel(32);
     let server_state = ServerState {
         metrics: HashMap::new(),
         workers: HashMap::new(),
