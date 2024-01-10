@@ -9,6 +9,15 @@ pub struct Julia {
     pub divergence_threshold_square: f64,
 }
 
+impl Julia {
+    pub fn new(c: Complex, divergence_threshold_square: f64) -> Self {
+        Self {
+            c,
+            divergence_threshold_square,
+        }
+    }
+}
+
 impl Fractal for Julia {
     fn generate(&self, max_iterations: u32, x: f64, y: f64) -> (f64, f64) {
         let mut z = Complex::new(x, y);

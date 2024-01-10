@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 shared = { path = "../shared"}
+complex-rs = { path = "../complex-rs"}
 chrono = "0.4.31"
 dotenv = "0.15.0"
 env_logger = "0.10.1"

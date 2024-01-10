@@ -39,6 +39,7 @@ async fn main() {
             };
 
             let worker = Worker::new(worker_name, maximal_work_load, address, port);
+            // NOTE: the run_worker fn takes ownership of the worker
             worker::run_worker(worker).await;
         }
         Commands::Server(args) => {
@@ -52,8 +53,18 @@ async fn main() {
                 None => 8787,
             };
 
-            let server = Server::new(address, port);
-            server::run_server(server).await;
+            let width = match args.width {
+                Some(width) => width,
+                None => 300,
+            };
+
+            let height = match args.height {
+                Some(height) => height,
+                None => 300,
+            };
+
+            let server = Server::new(address, port, width, height);
+            server::run_server(&server).await;
         }
     }
 }
