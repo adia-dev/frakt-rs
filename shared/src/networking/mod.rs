@@ -18,13 +18,25 @@ pub struct RawMessage {
     pub data: Vec<u8>,
 }
 
-pub async fn send_message(stream: &mut TcpStream, message: &[u8]) -> NetworkingResult<()> {
-    let total_message_size = message.len() as u32;
+pub async fn send_message(
+    stream: &mut TcpStream,
+    json_message: &[u8],
+    data: Option<&[u8]>,
+) -> NetworkingResult<()> {
+    let json_message_size = json_message.len() as u32;
+    let data_size = match data {
+        Some(data) => data.len() as u32,
+        None => 0,
+    };
+    let total_message_size = json_message_size + data_size;
 
     let mut buffer = Vec::new();
     buffer.extend_from_slice(&total_message_size.to_be_bytes());
-    buffer.extend_from_slice(&total_message_size.to_be_bytes());
-    buffer.extend_from_slice(message);
+    buffer.extend_from_slice(&json_message_size.to_be_bytes());
+    buffer.extend_from_slice(json_message);
+    if let Some(data) = data {
+        buffer.extend_from_slice(data);
+    };
 
     stream.write_all(&buffer).await?;
     Ok(stream.flush().await?)
@@ -102,14 +114,15 @@ pub async fn send_result(
     stream: &mut TcpStream,
     json_message: &str,
     binary_data: &[u8],
-    wtf: &[u8],
+    signature: &[u8],
 ) -> NetworkingResult<()> {
-    let total_message_size = (json_message.as_bytes().len() + binary_data.len() + wtf.len()) as u32;
+    let total_message_size =
+        (json_message.as_bytes().len() + binary_data.len() + signature.len()) as u32;
     stream.write_u32(total_message_size).await?;
     stream.flush().await?;
 
     write_json_message(stream, json_message).await?;
-    write_binary_data(stream, wtf).await?;
+    write_binary_data(stream, signature).await?;
     write_binary_data(stream, binary_data).await?;
     Ok(())
 }

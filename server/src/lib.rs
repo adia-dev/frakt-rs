@@ -3,13 +3,15 @@ pub mod server_state;
 
 use std::{
     collections::HashMap,
+    io::Cursor,
     mem::size_of,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use complex_rs::complex::Complex;
-use log::{debug, error, info};
+use image::EncodableLayout;
+use log::{debug, error, info, trace};
 use metrics::Metrics;
 use server_state::ServerState;
 use shared::{
@@ -29,6 +31,7 @@ use shared::{
     networking::{read_message_raw, result::NetworkingResult, send_message, server::Server},
 };
 use tokio::{
+    io::AsyncReadExt,
     net::{TcpListener, TcpStream},
     sync::mpsc,
     time,
@@ -59,12 +62,12 @@ async fn run(server: &Server) -> NetworkingResult<()> {
 
     let metrics_state = Arc::clone(&state);
     tokio::spawn(async move {
-        let mut interval = time::interval(Duration::from_secs(10));
+        let mut interval = time::interval(Duration::from_secs(1));
         loop {
             interval.tick().await;
             let state = metrics_state.lock().unwrap();
             for (_, worker) in &state.workers {
-                debug!("{:#?}", worker);
+                debug!("WORKER: {:#?}", worker);
             }
         }
     });
@@ -98,31 +101,34 @@ async fn handle_connection(
 ) -> NetworkingResult<()> {
     debug!("Handling new connection...");
     let raw_message = read_message_raw(&mut socket).await?;
+
+    // Now process the rest as pixel intensities
     if let Ok(result) = FragmentResult::from_json(&raw_message.json_message) {
         debug!("Received a result ! {:?}", result);
-        debug!("Data{:?}", result);
         _ = tokio::spawn(async move {
-            let pixel_intensities: Vec<PixelIntensity> = raw_message
-                .data
+            // Read the first 4 bytes
+            let (signature_bytes, pixel_data) = raw_message.data.split_at(16);
+
+            debug!("SignatureBytes: {:02X?}", signature_bytes);
+            debug!("PixelIntensityBytes: {:02X?}", pixel_data);
+
+            let pixel_intensities: Vec<PixelIntensity> = pixel_data
                 .chunks_exact(size_of::<PixelIntensity>())
                 .map(|pixel_intensity_chunk| {
-                    let (f32_bytes, _) = pixel_intensity_chunk.split_at(size_of::<f32>());
+                    let (zn_bytes, count_bytes) = pixel_intensity_chunk.split_at(4);
                     PixelIntensity {
-                        zn: f32::from_ne_bytes(f32_bytes.try_into().unwrap()),
-                        count: f32::from_ne_bytes(f32_bytes.try_into().unwrap()),
+                        zn: f32::from_be_bytes(zn_bytes.try_into().unwrap()),
+                        count: f32::from_be_bytes(count_bytes.try_into().unwrap()),
                     }
                 })
                 .collect();
             debug!("{:?}", pixel_intensities);
-        }).await;
+        })
+        .await;
         return Ok(());
     };
 
     let request = FragmentRequest::from_json(&raw_message.json_message)?;
-
-    // IT WAS SO PRETTYYYYY NOOOOOOO
-    // let (_, request) = read_fragment::<FragmentRequest>(&mut socket).await?;
-
     info!("FragmentRequest received successfully");
     debug!("FragmentRequest: {:?}", request);
 
@@ -136,19 +142,26 @@ async fn send_fragment_task(stream: &mut TcpStream) -> NetworkingResult<()> {
 
     let julia = Julia::new(Complex::new(0.285, 0.013), 4.0);
     let fractal_descriptor = FractalDescriptor::Julia(julia);
+    let max_iterations: u32 = 64;
 
-    let range = Range::new(Point::new(0.6, -1.2), Point::new(1.2, -0.6));
-    let resolution = Resolution::new(100, 100);
+    let resolution = Resolution::new(1, 1);
+    let range = Range::new(Point::new(-1.2, -1.2), Point::new(1.2, 1.2));
 
-    let task = FragmentTask::new(id, fractal_descriptor, 256, resolution, range).to_json()?;
+    let task = FragmentTask::new(id, fractal_descriptor, max_iterations, resolution, range);
+    let task_json = task.to_json()?;
 
-    let serialized_fragment_task = serde_json::to_string(&task)?;
+    let signature = [0u8; 16];
+    debug!(
+        "signature: {:02X?}", signature
+    );
+
+    let serialized_fragment_task = serde_json::to_string(&task_json)?;
     let serialized_fragment_task_bytes = serialized_fragment_task.as_bytes();
     debug!(
-        "Sending FragmentTask to server: {:?}",
-        serialized_fragment_task
+        "Sending FragmentTask to worker: {:?}",
+        task
     );
-    if let Err(e) = send_message(stream, serialized_fragment_task_bytes).await {
+    if let Err(e) = send_message(stream, serialized_fragment_task_bytes, Some(&signature)).await {
         error!("Failed to send task: {}", e);
         return Err(e.into());
     }

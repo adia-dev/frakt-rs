@@ -140,7 +140,7 @@ async fn send_fragment_request(stream: &mut TcpStream, worker: &Worker) -> Netwo
         "Sending FragmentRequest to server: {:?}",
         serialized_fragment_request
     );
-    if let Err(e) = send_message(stream, serialized_fragment_request_bytes).await {
+    if let Err(e) = send_message(stream, serialized_fragment_request_bytes, None).await {
         error!("Failed to send request: {}", e);
         return Err(e.into());
     }
