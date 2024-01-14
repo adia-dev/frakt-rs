@@ -1,3 +1,5 @@
+use std::{thread, time::Duration};
+
 use image::EncodableLayout;
 use log::{debug, error, info};
 use serde_json;
@@ -14,11 +16,6 @@ use shared::{
 };
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-// #[tokio::main]
-// async fn main() {
-//     run_worker().await;
-// }
-
 pub async fn run_worker(worker: Worker) {
     env::init();
     logger::init();
@@ -28,7 +25,18 @@ pub async fn run_worker(worker: Worker) {
     let handle = tokio::spawn(async move {
         loop {
             if let Err(e) = run(&worker).await {
-                error!("Application error: {}", e);
+                match e {
+                    shared::networking::error::NetworkingError::IoError(io_error) => {
+                        if io_error.kind() == std::io::ErrorKind::ConnectionReset {
+                            info!("JOB IS DONE !")
+                        } else {
+                            debug!("HMMMMM ?????")
+                        }
+                    }
+                    _ => {
+                        error!("Application error: {}", e);
+                    }
+                }
             }
         }
     });
@@ -42,7 +50,12 @@ async fn run(worker: &Worker) -> NetworkingResult<()> {
 
     loop {
         send_fragment_request(&mut stream, &worker).await?;
+
         let (data_message, task) = read_fragment_task(&mut stream).await?;
+
+        // NOTE: little sleepy sleep to make the logs readable and emulate a big FRAGMENT TASK
+        thread::sleep(Duration::from_millis(500));
+
         let (result, data) = perform_task(&task)?;
 
         let mut stream = connect_to_server(&server_addr).await?;
@@ -84,49 +97,25 @@ async fn send_fragment_result(
     Ok(())
 }
 
+// TODO: maybe handle each result function calls with a match expression
+// to be able to have more descriptive error messages
+// TODO: a more modular read_fragment function that takes a type T inheriting from the
+// Fragment trait
 async fn read_fragment_task(
     mut stream: &mut TcpStream,
 ) -> NetworkingResult<(Vec<u8>, FragmentTask)> {
-    let message_length = match read_message_length(&mut stream).await {
-        Ok(length) => length,
-        Err(e) => {
-            error!("Failed to read message length: {}", e);
-            return Err(e.into());
-        }
-    };
-    let json_length = match read_message_length(&mut stream).await {
-        Ok(length) => length,
-        Err(e) => {
-            error!("Failed to read json length: {}", e);
-            return Err(e.into());
-        }
-    };
-    let json_message = match read_json_message(&mut stream, json_length as usize).await {
-        Ok(json) => json,
-        Err(e) => {
-            error!("Failed to read JSON message: {}", e);
-            return Err(e.into());
-        }
-    };
-    debug!("Received JSON message: {}", json_message);
+    let message_length = read_message_length(&mut stream).await?;
+    let json_length = read_message_length(&mut stream).await?;
+    let json_message = read_json_message(&mut stream, json_length as usize).await?;
+
     let data_message =
-        match read_binary_data(&mut stream, (message_length - json_length) as usize).await {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to read DATA message: {}", e);
-                return Err(e.into());
-            }
-        };
-    debug!("Received DATA message: {:?}", data_message);
-    let task = match FragmentTask::from_json(&json_message) {
-        Ok(task) => task,
-        Err(e) => {
-            error!("Failed to deserialize JSON into FragmentTask: {}", e);
-            return Err(e.into());
-        }
-    };
+        read_binary_data(&mut stream, (message_length - json_length) as usize).await?;
+
+    let task = FragmentTask::from_json(&json_message)?;
+
     info!("FragmentTask deserialized successfully");
-    debug!("Deserialized FragmentTask: {:?}", task);
+    debug!("FragmentTask: {:?}", task);
+
     Ok((data_message, task))
 }
 

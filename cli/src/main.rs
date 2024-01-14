@@ -2,7 +2,7 @@ pub mod commands;
 
 use clap::Parser;
 use commands::Commands;
-use shared::networking::{worker::Worker, server::Server};
+use shared::networking::{server::Server, worker::Worker};
 use uuid::Uuid;
 
 /// Simple program to greet a person

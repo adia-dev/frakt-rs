@@ -3,15 +3,13 @@ pub mod server_state;
 
 use std::{
     collections::HashMap,
-    io::Cursor,
     mem::size_of,
     sync::{Arc, Mutex},
     time::Duration,
 };
 
 use complex_rs::complex::Complex;
-use image::EncodableLayout;
-use log::{debug, error, info, trace};
+use log::{debug, error, info};
 use metrics::Metrics;
 use server_state::ServerState;
 use shared::{
@@ -31,7 +29,6 @@ use shared::{
     networking::{read_message_raw, result::NetworkingResult, send_message, server::Server},
 };
 use tokio::{
-    io::AsyncReadExt,
     net::{TcpListener, TcpStream},
     sync::mpsc,
     time,
@@ -85,7 +82,17 @@ async fn run(server: &Server) -> NetworkingResult<()> {
         let state = Arc::clone(&state);
 
         tokio::spawn(async move {
-            _ = handle_connection(&mut socket, tx, state).await;
+            if let Err(e) = handle_connection(&mut socket, tx, state).await {
+                match e {
+                    shared::networking::error::NetworkingError::IoError(io_error) => {
+                        if io_error.kind() == std::io::ErrorKind::ConnectionReset {
+                            debug!("CONNECTION RESET !!!!");
+                        }
+                    }
+                    shared::networking::error::NetworkingError::JsonError(_) => todo!(),
+                    shared::networking::error::NetworkingError::Error(_) => todo!(),
+                }
+            }
         });
     }
 }
@@ -102,7 +109,6 @@ async fn handle_connection(
     debug!("Handling new connection...");
     let raw_message = read_message_raw(&mut socket).await?;
 
-    // Now process the rest as pixel intensities
     if let Ok(result) = FragmentResult::from_json(&raw_message.json_message) {
         debug!("Received a result ! {:?}", result);
         _ = tokio::spawn(async move {
@@ -110,9 +116,9 @@ async fn handle_connection(
             let (signature_bytes, pixel_data) = raw_message.data.split_at(16);
 
             debug!("SignatureBytes: {:02X?}", signature_bytes);
-            debug!("PixelIntensityBytes: {:02X?}", pixel_data);
 
-            let pixel_intensities: Vec<PixelIntensity> = pixel_data
+            // Now process the rest as pixel intensities
+            let _pixel_intensities: Vec<PixelIntensity> = pixel_data
                 .chunks_exact(size_of::<PixelIntensity>())
                 .map(|pixel_intensity_chunk| {
                     let (zn_bytes, count_bytes) = pixel_intensity_chunk.split_at(4);
@@ -122,7 +128,6 @@ async fn handle_connection(
                     }
                 })
                 .collect();
-            debug!("{:?}", pixel_intensities);
         })
         .await;
         return Ok(());
@@ -150,21 +155,17 @@ async fn send_fragment_task(stream: &mut TcpStream) -> NetworkingResult<()> {
     let task = FragmentTask::new(id, fractal_descriptor, max_iterations, resolution, range);
     let task_json = task.to_json()?;
 
+    // TODO: Randomize the signature for each task sent
     let signature = [0u8; 16];
-    debug!(
-        "signature: {:02X?}", signature
-    );
 
     let serialized_fragment_task = serde_json::to_string(&task_json)?;
     let serialized_fragment_task_bytes = serialized_fragment_task.as_bytes();
-    debug!(
-        "Sending FragmentTask to worker: {:?}",
-        task
-    );
+
+    debug!("Sending FragmentTask to worker: {:?}", task);
     if let Err(e) = send_message(stream, serialized_fragment_task_bytes, Some(&signature)).await {
         error!("Failed to send task: {}", e);
         return Err(e.into());
     }
-    info!("Task sent");
+    info!("FragmentTask sent to a worker");
     Ok(())
 }
