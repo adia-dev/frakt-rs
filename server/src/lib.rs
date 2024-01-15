@@ -13,7 +13,8 @@ use log::{debug, error, info};
 use metrics::Metrics;
 use server_state::ServerState;
 use shared::{
-    env, logger,
+    env,
+    logger,
     models::{
         fractal::{fractal_descriptor::FractalDescriptor, julia::Julia},
         fragments::{
@@ -35,9 +36,6 @@ use tokio::{
 };
 
 pub async fn run_server(server: &Server) {
-    env::init();
-    logger::init();
-
     match run(&server).await {
         Ok(()) => info!("Server shutdown gracefully"),
         Err(e) => error!("Server error: {}", e),
@@ -50,7 +48,7 @@ async fn run(server: &Server) -> NetworkingResult<()> {
 
     info!("Server listening on {}", server_addr);
 
-    let (tx, _) = mpsc::channel(32);
+    // let (metrics_tx, _) = mpsc::channel(32);
     let server_state = ServerState {
         metrics: HashMap::new(),
         workers: HashMap::new(),
@@ -69,32 +67,42 @@ async fn run(server: &Server) -> NetworkingResult<()> {
         }
     });
 
-    loop {
-        let (mut socket, _) = match listener.accept().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                error!("Failed to accept connection: {}", e);
-                continue;
-            }
-        };
-
-        let tx = tx.clone();
-        let state = Arc::clone(&state);
-
-        tokio::spawn(async move {
-            if let Err(e) = handle_connection(&mut socket, tx, state).await {
-                match e {
-                    shared::networking::error::NetworkingError::IoError(io_error) => {
-                        if io_error.kind() == std::io::ErrorKind::ConnectionReset {
-                            debug!("CONNECTION RESET !!!!");
-                        }
-                    }
-                    shared::networking::error::NetworkingError::JsonError(_) => todo!(),
-                    shared::networking::error::NetworkingError::Error(_) => todo!(),
+    let (fragment_result_tx, fragment_result_rx) = mpsc::channel::<(FragmentResult, Vec<u8>)>(32);
+    let workers_handle = tokio::spawn(async move {
+        loop {
+            let (mut socket, _) = match listener.accept().await {
+                Ok(conn) => conn,
+                Err(e) => {
+                    error!("Failed to accept connection: {}", e);
+                    continue;
                 }
-            }
-        });
-    }
+            };
+
+            let tx = fragment_result_tx.clone();
+            let state = Arc::clone(&state);
+
+            tokio::spawn(async move {
+                if let Err(e) = handle_connection(&mut socket, tx, state).await {
+                    match e {
+                        shared::networking::error::NetworkingError::IoError(io_error) => {
+                            if io_error.kind() == std::io::ErrorKind::ConnectionReset {
+                                debug!("CONNECTION RESET !!!!");
+                            }
+                        }
+                        shared::networking::error::NetworkingError::JsonError(_) => todo!(),
+                        shared::networking::error::NetworkingError::Error(_) => todo!(),
+                    }
+                }
+            });
+        }
+    });
+
+    // Graphics process
+    run_graphics(server.width, server.height, fragment_result_rx).await;
+
+    _ = workers_handle.await;
+
+    Ok(())
 }
 
 async fn start_server(addr: &str) -> NetworkingResult<TcpListener> {
@@ -103,7 +111,7 @@ async fn start_server(addr: &str) -> NetworkingResult<TcpListener> {
 
 async fn handle_connection(
     mut socket: &mut TcpStream,
-    _tx: mpsc::Sender<Metrics>,
+    tx: mpsc::Sender<(FragmentResult, Vec<u8>)>,
     _state: Arc<Mutex<ServerState>>,
 ) -> NetworkingResult<()> {
     debug!("Handling new connection...");
@@ -114,6 +122,22 @@ async fn handle_connection(
         _ = tokio::spawn(async move {
             // Read the first 4 bytes
             let (signature_bytes, pixel_data) = raw_message.data.split_at(16);
+
+            info!("Sending the FragmentResult to the rendering channel.");
+            match tx.send((result, pixel_data.to_vec())).await {
+                Ok(it) => {
+                    debug!(
+                        "Successfully sent a FragmentResult to the rendering channel. {:?}",
+                        it
+                    );
+                }
+                Err(err) => {
+                    error!(
+                        "Failed to send the FragmentResult through the channel. {:?}",
+                        err
+                    );
+                }
+            };
 
             debug!("SignatureBytes: {:02X?}", signature_bytes);
 

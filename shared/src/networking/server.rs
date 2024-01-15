@@ -4,12 +4,12 @@ use serde::{Deserialize, Serialize};
 pub struct Server {
     pub address: String,
     pub port: u16,
-    pub width: u16,
-    pub height: u16,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Server {
-    pub fn new(address: String, port: u16, width: u16, height: u16) -> Self {
+    pub fn new(address: String, port: u16, width: u32, height: u32) -> Self {
         Self {
             address,
             port,

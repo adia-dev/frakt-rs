@@ -1,21 +1,52 @@
 pub mod commands;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use commands::Commands;
-use shared::networking::{server::Server, worker::Worker};
+use shared::{
+    env, logger,
+    networking::{server::Server, worker::Worker},
+};
 use uuid::Uuid;
 
-/// Simple program to greet a person
+#[derive(Debug, ValueEnum, Clone)]
+pub enum LogLevel {
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+/// 🌟 Frakt CLI
+///
+/// The command center for managing and controlling the Frakt application 🎮.
+/// Launch servers, workers, monitor performance, and tweak system configurations.
 #[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
+#[command(author, version, about = "🔧 Frakt Command Line Interface", long_about = None)]
 struct Cli {
+    /// 📚 Subcommands
+    ///
+    /// Choose a specific operation mode for the Frakt application.
     #[clap(subcommand)]
     command: Commands,
+
+    /// 📢 Log Level
+    ///
+    /// Set the verbosity level for logging output 📝.
+    /// Options: error, warn, info, debug, trace.
+    #[clap(long, default_value = "info", value_name = "LEVEL")]
+    log_level: String,
+
+    #[clap(short, long)]
+    config: Option<std::path::PathBuf>,
 }
 
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
+
+    env::init();
+    logger::init_with_level(cli.log_level.as_str());
 
     match cli.command {
         Commands::Worker(args) => {
@@ -38,9 +69,26 @@ async fn main() {
                 None => 8787,
             };
 
-            let worker = Worker::new(worker_name, maximal_work_load, address, port);
-            // NOTE: the run_worker fn takes ownership of the worker
-            worker::run_worker(worker).await;
+            let count = match args.count {
+                Some(count) => count,
+                None => 1,
+            };
+
+            let mut handles = Vec::new();
+            for _ in 0..=count {
+                let address = address.clone();
+                let worker_name = format!("worker-{}", Uuid::new_v4());
+                let handle = tokio::spawn(async move {
+                    let worker = Worker::new(worker_name, maximal_work_load, address, port);
+                    worker::run_worker(worker).await;
+                });
+                handles.push(handle);
+            }
+
+            // Wait for all the tasks to complete
+            for handle in handles {
+                handle.await.expect("Task failed");
+            }
         }
         Commands::Server(args) => {
             let address = match args.address {

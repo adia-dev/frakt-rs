@@ -17,9 +17,6 @@ use shared::{
 use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 pub async fn run_worker(worker: Worker) {
-    env::init();
-    logger::init();
-
     // TODO: maybe add a counter of consecutive errors with a threshold
     // to detect and shutdown the connection if it is too recurrent
     let handle = tokio::spawn(async move {
@@ -54,7 +51,7 @@ async fn run(worker: &Worker) -> NetworkingResult<()> {
         let (data_message, task) = read_fragment_task(&mut stream).await?;
 
         // NOTE: little sleepy sleep to make the logs readable and emulate a big FRAGMENT TASK
-        thread::sleep(Duration::from_millis(500));
+        // thread::sleep(Duration::from_millis(500));
 
         let (result, data) = perform_task(&task)?;
 

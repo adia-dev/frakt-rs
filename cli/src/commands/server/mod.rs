@@ -25,12 +25,32 @@ pub struct ServerCommand {
     /// Set the width for the server's operational parameters 📐.
     /// This might represent the width of a window or a grid, depending on context.
     #[arg(long, value_name = "WIDTH")]
-    pub width: Option<u16>,
+    pub width: Option<u32>,
 
     /// 📐 Server height
     ///
     /// Set the height for the server's operational parameters 🧱.
     /// Similar to width, this parameter depends on the specific use case.
     #[arg(long, value_name = "HEIGHT")]
-    pub height: Option<u16>,
+    pub height: Option<u32>,
+
+    /// 🖥️ Server Dashboard
+    ///
+    /// Enable or disable the server's web dashboard interface 🌐.
+    /// Useful for monitoring and controlling the server remotely.
+    #[arg(long, value_name = "ENABLED")]
+    pub dashboard: Option<bool>,
+
+    /// 🔒 Security Mode
+    ///
+    /// Enable enhanced security features for the server 🛡️.
+    /// Includes SSL, firewalls, and intrusion detection systems.
+    #[arg(long, value_name = "SECURITY")]
+    pub security_mode: Option<bool>,
+    
+    /// 🎨 Graphical Mode
+    ///
+    /// TODO: Add description for the graphical mode option
+    #[arg(long, value_name = "GRAPHICS")]
+    pub graphics: Option<bool>,
 }

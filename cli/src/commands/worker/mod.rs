@@ -25,6 +25,13 @@ pub struct WorkerCommand {
     /// The port number of the server 🎚️ to which the worker will connect.
     #[arg(short, long, value_name = "PORT")]
     pub port: Option<u16>,
+    
+
+    /// 🔌 Replicas
+    ///
+    /// The numer of replicas to launch of a given worker
+    #[arg(short, long, value_name = "COUNT")]
+    pub count: Option<u8>,
 
     /// 🏋️‍♂️ Maximum workload
     ///

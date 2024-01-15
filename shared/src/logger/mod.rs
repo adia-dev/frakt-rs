@@ -1,10 +1,14 @@
 use chrono::Local;
 use colored::Colorize;
 use env_logger::{Builder, Env};
-use log::{Level, LevelFilter};
+use log::{debug, info, Level, LevelFilter};
 use std::io::Write;
 
 pub fn init() {
+    init_with_level("info");
+}
+
+pub fn init_with_level(level_filter: &str) {
     Builder::new()
         .format(|buf, record| {
             let timestamp = Local::now()
@@ -21,7 +25,7 @@ pub fn init() {
             };
             writeln!(buf, "{} {} {}", timestamp, level_colored, record.args())
         })
-        .filter(None, LevelFilter::Info)
-        .parse_env(Env::default().default_filter_or("info"))
+        // .filter(None, LevelFilter::Info)
+        .parse_env(Env::default().default_filter_or(level_filter))
         .init();
 }
