@@ -4,7 +4,6 @@ use image::EncodableLayout;
 use log::{debug, error, info};
 use serde_json;
 use shared::{
-    env, logger,
     models::fragments::{
         fragment::Fragment, fragment_request::FragmentRequest, fragment_result::FragmentResult,
         fragment_task::FragmentTask,
@@ -51,7 +50,7 @@ async fn run(worker: &Worker) -> NetworkingResult<()> {
         let (data_message, task) = read_fragment_task(&mut stream).await?;
 
         // NOTE: little sleepy sleep to make the logs readable and emulate a big FRAGMENT TASK
-        // thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(500));
 
         let (result, data) = perform_task(&task)?;
 

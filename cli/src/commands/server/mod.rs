@@ -47,7 +47,7 @@ pub struct ServerCommand {
     /// Includes SSL, firewalls, and intrusion detection systems.
     #[arg(long, value_name = "SECURITY")]
     pub security_mode: Option<bool>,
-    
+
     /// 🎨 Graphical Mode
     ///
     /// TODO: Add description for the graphical mode option

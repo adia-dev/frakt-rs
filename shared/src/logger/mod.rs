@@ -1,7 +1,7 @@
 use chrono::Local;
 use colored::Colorize;
 use env_logger::{Builder, Env};
-use log::{debug, info, Level, LevelFilter};
+use log::Level;
 use std::io::Write;
 
 pub fn init() {
