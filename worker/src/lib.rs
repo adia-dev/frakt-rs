@@ -21,18 +21,8 @@ pub async fn run_worker(worker: Worker) {
     let handle = tokio::spawn(async move {
         loop {
             if let Err(e) = run(&worker).await {
-                match e {
-                    shared::networking::error::NetworkingError::IoError(io_error) => {
-                        if io_error.kind() == std::io::ErrorKind::ConnectionReset {
-                            info!("JOB IS DONE !")
-                        } else {
-                            debug!("HMMMMM ?????")
-                        }
-                    }
-                    _ => {
-                        error!("Application error: {}", e);
-                    }
-                }
+                error!("Application error: {}", e);
+                break;
             }
         }
     });

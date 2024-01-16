@@ -1,11 +1,10 @@
-pub mod metrics;
-pub mod server_state;
-
 use std::mem::size_of;
 
 use complex_rs::complex::Complex;
+use image::{ImageBuffer, Rgb};
 use log::{debug, error, info};
 use shared::{
+    graphics::start_graphics,
     models::{
         fractal::{fractal_descriptor::FractalDescriptor, julia::Julia},
         fragments::{
@@ -20,7 +19,13 @@ use shared::{
     },
     networking::{read_message_raw, result::NetworkingResult, send_message, server::Server},
 };
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::{
+        broadcast,
+        mpsc::{self, Sender},
+    },
+};
 
 pub async fn run_server(server: &Server) {
     match run(&server).await {
@@ -32,28 +37,43 @@ pub async fn run_server(server: &Server) {
 async fn run(server: &Server) -> NetworkingResult<()> {
     let server_addr = format!("{}:{}", server.address, server.port);
     let listener = start_server(&server_addr).await?;
-
     info!("Server listening on {}", server_addr);
 
-    let workers_handle = tokio::spawn(async move {
-        loop {
-            let (mut socket, _) = match listener.accept().await {
-                Ok(conn) => conn,
-                Err(e) => {
-                    error!("Failed to accept connection: {}", e);
-                    continue;
-                }
-            };
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
+    let (rendering_tx, rendering_rx) = mpsc::channel::<Vec<(u8, u8, u8)>>(32);
+    info!("Launched the rendering channels !");
 
-            tokio::spawn(async move {
-                if let Err(e) = handle_connection(&mut socket).await {
-                    error!("Error: {:?}", e);
-                }
-            });
-        }
+    // Spawn a task to handle connections
+    let server_handle = {
+        let shutdown_tx: broadcast::Sender<()> = shutdown_tx.clone();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                let rendering_tx = rendering_tx.clone();
+                let mut shutdown_rx = shutdown_tx.subscribe();
+
+                tokio::spawn(async move {
+                    tokio::select! {
+                        result = handle_connection(&mut socket, rendering_tx) => {
+                            if let Err(e) = result {
+                                error!("Connection handling error: {:?}", e);
+                            }
+                        },
+                        _ = shutdown_rx.recv() => {
+                            debug!("Shutting down connection handler.");
+                        }
+                    }
+                });
+            }
+        })
+    };
+
+    let graphics_handle = start_graphics(server.width, server.height, rendering_rx);
+
+    tokio::spawn(async move {
+        shutdown_tx.send(()).unwrap();
     });
 
-    _ = workers_handle.await;
+    let _ = tokio::join!(server_handle, graphics_handle);
 
     Ok(())
 }
@@ -62,7 +82,10 @@ async fn start_server(addr: &str) -> NetworkingResult<TcpListener> {
     Ok(TcpListener::bind(addr).await?)
 }
 
-async fn handle_connection(mut socket: &mut TcpStream) -> NetworkingResult<()> {
+async fn handle_connection(
+    mut socket: &mut TcpStream,
+    rendering_tx: Sender<Vec<(u8, u8, u8)>>,
+) -> NetworkingResult<()> {
     debug!("Handling new connection...");
     let raw_message = read_message_raw(&mut socket).await?;
 
@@ -74,19 +97,39 @@ async fn handle_connection(mut socket: &mut TcpStream) -> NetworkingResult<()> {
             // NOTE: I've written 4 but it will eventually become dynamic
             let (signature_bytes, pixel_data) = raw_message.data.split_at(16);
             info!("Task Signature received and verified !");
+            // TODO: implement the actual verification of the signature
             debug!("Task Signature: {:02X?}", signature_bytes);
 
             // Now process the rest as pixel intensities
-            let _pixel_intensities: Vec<PixelIntensity> = pixel_data
+            let pixel_intensities: Vec<PixelIntensity> = pixel_data
                 .chunks_exact(size_of::<PixelIntensity>())
                 .map(|pixel_intensity_chunk| {
                     let (zn_bytes, count_bytes) = pixel_intensity_chunk.split_at(4);
+                    // NOTE: Do I really need to create a PixelIntensity instance ? a tuple is
+                    // enough right ?
                     PixelIntensity {
                         zn: f32::from_be_bytes(zn_bytes.try_into().unwrap()),
                         count: f32::from_be_bytes(count_bytes.try_into().unwrap()),
                     }
                 })
                 .collect();
+
+            let mut image_buffer: ImageBuffer<Rgb<u8>, Vec<u8>> =
+                ImageBuffer::new(result.resolution.nx as u32, result.resolution.ny as u32);
+
+            let mut colors: Vec<(u8, u8, u8)> = Vec::new();
+            for (x, y, _pixel) in image_buffer.enumerate_pixels_mut() {
+                let (i, zn) = (
+                    pixel_intensities[(y * (result.resolution.nx as u32) + x) as usize].count,
+                    pixel_intensities[(y * (result.resolution.nx as u32) + x) as usize].zn,
+                );
+                let t = (i as f32 - zn.log2().log2()) / (64 as f32);
+
+                let [red, green, blue] = color((2.0 * t + 0.5) % 1.0);
+                colors.push((red, green, blue));
+            }
+
+            _ = rendering_tx.send(colors).await;
         })
         .await;
         return Ok(());
@@ -101,6 +144,17 @@ async fn handle_connection(mut socket: &mut TcpStream) -> NetworkingResult<()> {
     Ok(())
 }
 
+fn color(t: f32) -> [u8; 3] {
+    let a = (0.5, 0.5, 0.5);
+    let b = (0.5, 0.5, 0.5);
+    let c = (1.0, 1.0, 1.0);
+    let d = (0.0, 0.10, 0.20);
+    let r = b.0 * (6.28318 * (c.0 * t + d.0)).cos() + a.0;
+    let g = b.1 * (6.28318 * (c.1 * t + d.1)).cos() + a.1;
+    let b = b.2 * (6.28318 * (c.2 * t + d.2)).cos() + a.2;
+    [(255.0 * r) as u8, (255.0 * g) as u8, (255.0 * b) as u8]
+}
+
 async fn send_fragment_task(stream: &mut TcpStream, worker_name: &str) -> NetworkingResult<()> {
     let id = U8Data::new(0, 16);
 
@@ -108,7 +162,7 @@ async fn send_fragment_task(stream: &mut TcpStream, worker_name: &str) -> Networ
     let fractal_descriptor = FractalDescriptor::Julia(julia);
     let max_iterations: u32 = 64;
 
-    let resolution = Resolution::new(300, 300);
+    let resolution = Resolution::new(500, 500);
     let range = Range::new(Point::new(-1.2, -1.2), Point::new(1.2, 1.2));
 
     let task = FragmentTask::new(id, fractal_descriptor, max_iterations, resolution, range);

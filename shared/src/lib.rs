@@ -2,6 +2,7 @@ pub mod env;
 pub mod logger;
 pub mod models;
 pub mod networking;
+pub mod graphics;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
