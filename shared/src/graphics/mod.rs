@@ -44,7 +44,7 @@ pub async fn start_graphics(
     let window = {
         let size = LogicalSize::new(world.width as f64, world.height as f64);
         WindowBuilder::new()
-            .with_title("Hello Pixels")
+            .with_title("Frakt")
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)

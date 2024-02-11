@@ -3,6 +3,7 @@ pub mod result;
 pub mod server;
 pub mod worker;
 
+use log::debug;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 

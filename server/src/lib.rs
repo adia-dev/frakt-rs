@@ -2,11 +2,11 @@ use std::mem::size_of;
 
 use complex_rs::complex::Complex;
 use image::{ImageBuffer, Rgb};
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
 use shared::{
     graphics::start_graphics,
     models::{
-        fractal::{fractal_descriptor::FractalDescriptor, julia::Julia},
+        fractal::{fractal_descriptor::FractalDescriptor, julia::Julia, mandelbrot::Mandelbrot},
         fragments::{
             fragment::Fragment, fragment_request::FragmentRequest, fragment_result::FragmentResult,
             fragment_task::FragmentTask,
@@ -39,17 +39,14 @@ async fn run(server: &Server) -> NetworkingResult<()> {
     let listener = start_server(&server_addr).await?;
     info!("Server listening on {}", server_addr);
 
-    let (shutdown_tx, _) = broadcast::channel::<()>(1);
     let (rendering_tx, rendering_rx) = mpsc::channel::<Vec<(u8, u8, u8)>>(32);
     info!("Launched the rendering channels !");
 
     // Spawn a task to handle connections
     let server_handle = {
-        let shutdown_tx: broadcast::Sender<()> = shutdown_tx.clone();
         tokio::spawn(async move {
             while let Ok((mut socket, _)) = listener.accept().await {
                 let rendering_tx = rendering_tx.clone();
-                let mut shutdown_rx = shutdown_tx.subscribe();
 
                 tokio::spawn(async move {
                     tokio::select! {
@@ -58,9 +55,6 @@ async fn run(server: &Server) -> NetworkingResult<()> {
                                 error!("Connection handling error: {:?}", e);
                             }
                         },
-                        _ = shutdown_rx.recv() => {
-                            debug!("Shutting down connection handler.");
-                        }
                     }
                 });
             }
@@ -68,10 +62,6 @@ async fn run(server: &Server) -> NetworkingResult<()> {
     };
 
     let graphics_handle = start_graphics(server.width, server.height, rendering_rx);
-
-    tokio::spawn(async move {
-        shutdown_tx.send(()).unwrap();
-    });
 
     let _ = tokio::join!(server_handle, graphics_handle);
 
@@ -88,6 +78,7 @@ async fn handle_connection(
 ) -> NetworkingResult<()> {
     debug!("Handling new connection...");
     let raw_message = read_message_raw(&mut socket).await?;
+    trace!("{:?}", raw_message);
 
     if let Ok(result) = FragmentResult::from_json(&raw_message.json_message) {
         info!("Received a FragmentResult !");
@@ -125,7 +116,7 @@ async fn handle_connection(
                 );
                 let t = (i as f32 - zn.log2().log2()) / (64 as f32);
 
-                let [red, green, blue] = color((2.0 * t + 0.5) % 1.0);
+                let [red, green, blue] = color((40.0 * t + 0.5) % 1.0);
                 colors.push((red, green, blue));
             }
 
@@ -145,10 +136,11 @@ async fn handle_connection(
 }
 
 fn color(t: f32) -> [u8; 3] {
-    let a = (0.5, 0.5, 0.5);
-    let b = (0.5, 0.5, 0.5);
-    let c = (1.0, 1.0, 1.0);
-    let d = (0.0, 0.10, 0.20);
+    let a = (0.910, 0.541, 0.988);
+    let b = (0.927, 0.211, 0.790);
+    let c = (1.285, 1.294, 0.802);
+    let d = (2.910, 4.973, 1.429);
+
     let r = b.0 * (6.28318 * (c.0 * t + d.0)).cos() + a.0;
     let g = b.1 * (6.28318 * (c.1 * t + d.1)).cos() + a.1;
     let b = b.2 * (6.28318 * (c.2 * t + d.2)).cos() + a.2;
@@ -158,8 +150,8 @@ fn color(t: f32) -> [u8; 3] {
 async fn send_fragment_task(stream: &mut TcpStream, worker_name: &str) -> NetworkingResult<()> {
     let id = U8Data::new(0, 16);
 
-    let julia = Julia::new(Complex::new(0.285, 0.013), 4.0);
-    let fractal_descriptor = FractalDescriptor::Julia(julia);
+    let mandelbrot = Mandelbrot::new();
+    let fractal_descriptor = FractalDescriptor::Mandelbrot(mandelbrot);
     let max_iterations: u32 = 64;
 
     let resolution = Resolution::new(500, 500);

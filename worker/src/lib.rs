@@ -22,7 +22,6 @@ pub async fn run_worker(worker: Worker) {
         loop {
             if let Err(e) = run(&worker).await {
                 error!("Application error: {}", e);
-                break;
             }
         }
     });
@@ -37,7 +36,7 @@ async fn run(worker: &Worker) -> NetworkingResult<()> {
     loop {
         send_fragment_request(&mut stream, &worker).await?;
 
-        let (data_message, task) = read_fragment_task(&mut stream).await?;
+        let (signature, task) = read_fragment_task(&mut stream).await?;
 
         // NOTE: little sleepy sleep to make the logs readable and emulate a big FRAGMENT TASK
         thread::sleep(Duration::from_millis(500));
@@ -45,7 +44,7 @@ async fn run(worker: &Worker) -> NetworkingResult<()> {
         let (result, data) = perform_task(&task)?;
 
         let mut stream = connect_to_server(&server_addr).await?;
-        send_fragment_result(&result, &mut stream, &data, &data_message).await?;
+        send_fragment_result(&result, &mut stream, &data, &signature).await?;
 
         _ = stream.shutdown().await?;
     }
@@ -68,15 +67,17 @@ async fn send_fragment_result(
     result: &FragmentResult,
     inner_stream: &mut TcpStream,
     data: &Vec<u8>,
-    data_message: &Vec<u8>,
+    signature: &Vec<u8>,
 ) -> NetworkingResult<()> {
     let serialized_fragment_result = FragmentResult::to_json(&result)?.to_string();
     debug!("FragmentResult: {}", serialized_fragment_result);
+    debug!("Signature: {:?}", signature);
+    debug!("Data: {:?}", data);
     send_result(
         inner_stream,
         &serialized_fragment_result,
         &data,
-        &data_message.as_bytes(),
+        &signature.as_bytes(),
     )
     .await?;
     info!("FragmentResult sent successfully");
