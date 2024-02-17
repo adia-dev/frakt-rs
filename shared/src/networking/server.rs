@@ -1,20 +1,152 @@
+use std::sync::{Arc, Mutex};
+
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc::Sender;
+
+use crate::{
+    dtos::rendering_data::RenderingData,
+    models::{point::Point, range::Range, resolution::Resolution},
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Server {
+pub struct ServerConfig {
     pub address: String,
     pub port: u16,
     pub width: u32,
     pub height: u32,
+    pub tiles: u32,
+    pub range: Range,
+    pub speed: f64,
 }
 
-impl Server {
-    pub fn new(address: String, port: u16, width: u32, height: u32) -> Self {
+impl ServerConfig {
+    pub fn new(address: String, port: u16, width: u32, height: u32, tiles: u32) -> Self {
+        let min = Point::new(-1.2, -1.2);
+        let max = Point::new(1.2, 1.2);
+        let range = Range::new(min, max);
+        let speed = 1.0;
+
         Self {
             address,
             port,
             width,
             height,
+            tiles,
+            range,
+            speed,
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Server {
+    pub config: ServerConfig,
+    pub render_tx: Sender<RenderingData>,
+    pub tiles: Arc<Mutex<Vec<Range>>>,
+    pub range: Range,
+}
+
+impl Server {
+    pub fn new(config: ServerConfig, render_tx: Sender<RenderingData>) -> Self {
+        let range = config.range;
+        let tiles = Server::generate_tiles(&range, config.tiles);
+
+        Self {
+            config,
+            render_tx,
+            tiles,
+            range,
+        }
+    }
+
+    pub fn move_right(&mut self) {
+        self._move(self.config.speed, 0.0);
+    }
+
+    pub fn move_left(&mut self) {
+        self._move(-self.config.speed, 0.0);
+    }
+
+    pub fn move_up(&mut self) {
+        self._move(0.0, self.config.speed);
+    }
+
+    pub fn move_down(&mut self) {
+        self._move(0.0, -self.config.speed);
+    }
+
+    fn _move(&mut self, x: f64, y: f64) {
+        let tile_width = (self.range.max.x - self.range.min.x) / self.config.tiles as f64;
+        let tile_height = (self.range.max.y - self.range.min.y) / self.config.tiles as f64;
+
+        let dx = tile_width * x;
+        let dy = tile_height * y;
+
+        self.range.min.x += dx;
+        self.range.max.x += dx;
+        self.range.min.y += dy;
+        self.range.max.y += dy;
+
+        self.tiles = Server::generate_tiles(&self.range, self.config.tiles);
+    }
+
+    pub fn zoom(&mut self, factor: f64) {
+        let tile_width = (self.range.max.x - self.range.min.x) / self.config.tiles as f64;
+        let tile_height = (self.range.max.y - self.range.min.y) / self.config.tiles as f64;
+
+        let dx = tile_width * factor;
+        let dy = tile_height * factor;
+
+        self.range.min.x += dx;
+        self.range.max.x -= dx;
+        self.range.min.y += dy;
+        self.range.max.y -= dy;
+
+        self.tiles = Server::generate_tiles(&self.range, self.config.tiles);
+    }
+
+    pub fn get_random_tile(&self) -> Option<Range> {
+        let mut tiles = self.tiles.lock().unwrap();
+        if tiles.is_empty() {
+            None
+        } else {
+            let mut rng = thread_rng();
+            let len = tiles.len();
+            tiles.remove(rng.gen_range(0..len)).into()
+        }
+    }
+
+    pub fn calculate_resolution(&self, width: u32, height: u32, tiles: u32) -> Resolution {
+        let tile_width = (width / tiles) as u16;
+        let tile_height = (height / tiles) as u16;
+
+        Resolution::new(tile_width, tile_height)
+    }
+
+    pub fn calculate_range(id: u8, tiles: u32, range: &Range) -> Range {
+        let tile_width = (range.max.x - range.min.x) / tiles as f64;
+        let tile_height = (range.max.y - range.min.y) / tiles as f64;
+
+        let x = (id % tiles as u8) as f64;
+        let y = (id / tiles as u8) as f64;
+
+        let min = Point::new(range.min.x + x * tile_width, range.min.y + y * tile_height);
+        let max = Point::new(
+            range.min.x + (x + 1.0) * tile_width,
+            range.min.y + (y + 1.0) * tile_height,
+        );
+
+        Range::new(min, max)
+    }
+
+    fn generate_tiles(range: &Range, count: u32) -> Arc<Mutex<Vec<Range>>> {
+        let mut ranges = Vec::new();
+        for i in 0..(count * count) {
+            let range = Server::calculate_range(i as u8, count, range);
+            ranges.push(range);
+        }
+
+        Arc::new(Mutex::new(ranges))
     }
 }

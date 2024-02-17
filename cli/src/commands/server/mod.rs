@@ -34,6 +34,16 @@ pub struct ServerCommand {
     #[arg(long, value_name = "HEIGHT")]
     pub height: Option<u32>,
 
+    // number of tiles
+    /// 🧩 Server tiles
+    ///
+    /// Set the number of tiles 🧩 to use for the server's rendering.
+    /// This parameter is used to divide the rendering workload into smaller pieces.
+    /// The number of tiles should be a power of 2 for best performance.
+    /// Default is 4 if not specified.
+    #[arg(long, value_name = "TILES")]
+    pub tiles: Option<u32>,
+
     /// 🖥️ Server Dashboard
     ///
     /// Enable or disable the server's web dashboard interface 🌐.

@@ -30,7 +30,7 @@ pub struct WorkerCommand {
     ///
     /// The numer of replicas to launch of a given worker
     #[arg(short, long, value_name = "COUNT")]
-    pub count: Option<u8>,
+    pub count: Option<u32>,
 
     /// 🏋️‍♂️ Maximum workload
     ///

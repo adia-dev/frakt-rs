@@ -1,10 +1,10 @@
 pub mod commands;
 
 use clap::Parser;
-use commands::{Cli, Commands};
+use commands::{server::ServerCommand, worker::WorkerCommand, Cli, Commands};
 use shared::{
     env, logger,
-    networking::{server::Server, worker::Worker},
+    networking::{server::ServerConfig, worker::Worker},
 };
 use uuid::Uuid;
 
@@ -16,69 +16,44 @@ async fn main() {
     logger::init_with_level(cli.log_level.to_string().as_str());
 
     match cli.command {
-        Commands::Worker(args) => {
-            let maximal_work_load = match args.maximal_work_load {
-                Some(maximal_work_load) => maximal_work_load,
-                None => 500,
-            };
-
-            let address = match args.address {
-                Some(address) => address,
-                None => "localhost".to_string(),
-            };
-
-            let port = match args.port {
-                Some(port) => port,
-                None => 8787,
-            };
-
-            let count = match args.count {
-                Some(count) => count,
-                None => 1,
-            };
-
-            let mut handles = Vec::new();
-            for _ in 0..=count {
-                let address = address.clone();
-                let worker_name = match &args.name {
-                    Some(name) => name.to_owned(),
-                    None => format!("worker-{}", Uuid::new_v4()),
-                };
-                let handle = tokio::spawn(async move {
-                    let worker = Worker::new(worker_name, maximal_work_load, address, port);
-                    worker::run_worker(worker).await;
-                });
-                handles.push(handle);
-            }
-
-            // Wait for all the tasks to complete
-            for handle in handles {
-                handle.await.expect("Task failed");
-            }
-        }
-        Commands::Server(args) => {
-            let address = match args.address {
-                Some(address) => address,
-                None => "localhost".to_string(),
-            };
-
-            let port = match args.port {
-                Some(port) => port,
-                None => 8787,
-            };
-
-            let width = match args.width {
-                Some(width) => width,
-                None => 300,
-            };
-
-            let height = match args.height {
-                Some(height) => height,
-                None => 300,
-            };
-
-            let server = Server::new(address, port, width, height);
-            server::run_server(&server).await;
-        }
+        Commands::Worker(args) => run_workers(args).await,
+        Commands::Server(args) => run_server(args).await,
     }
+}
+
+async fn run_workers(args: WorkerCommand) {
+    let address = args.address.unwrap_or_else(|| "localhost".to_string());
+    let port = args.port.unwrap_or(8787);
+    let maximal_work_load = args.maximal_work_load.unwrap_or(500);
+    let count = args.count.unwrap_or(1);
+
+    let worker_tasks: Vec<_> = (0..count)
+        .map(|_| {
+            let worker_address = address.clone();
+            let worker_name = args
+                .name
+                .clone()
+                .unwrap_or_else(|| format!("worker-{}", Uuid::new_v4()));
+            tokio::spawn(async move {
+                let worker = Worker::new(worker_name, maximal_work_load, worker_address, port);
+                worker::run_worker(worker).await;
+            })
+        })
+        .collect();
+
+    // Await all worker tasks
+    for task in worker_tasks {
+        task.await.expect("Worker task failed");
+    }
+}
+
+async fn run_server(args: ServerCommand) {
+    let address = args.address.unwrap_or_else(|| "localhost".to_string());
+    let port = args.port.unwrap_or(8787);
+    let width = args.width.unwrap_or(300);
+    let height = args.height.unwrap_or(300);
+    let tiles = args.tiles.unwrap_or(4);
+
+    let server_config = ServerConfig::new(address, port, width, height, tiles);
+    server::run_graphics_server(&server_config).await;
 }
