@@ -148,6 +148,7 @@ async fn process_fragment_result(
         pixels,
         result,
         counts,
+        worker: "adia-dev".to_owned(),
     };
 
     if let Err(e) = render_tx.send(rendering_data).await {
@@ -165,13 +166,20 @@ async fn process_fragment_request(
         request.worker_name
     );
     trace!("FragmentRequest details: {:?}", request);
-    // let task = create_fragment_task(&server);
-    if let Some(task) = create_fragment_task(server).await {
-        if let Err(e) = send_fragment_task(socket, &request.worker_name, &task).await {
-            error!("Failed to send fragment task: {}", e);
+    let task = {
+        let server = server.lock().unwrap();
+        server.create_fragment_task()
+    };
+
+    match task {
+        Some(task) => {
+            if let Err(e) = send_fragment_task(socket, &request.worker_name, &task).await {
+                error!("Failed to send fragment task: {}", e);
+            }
         }
-    } else {
-        info!("No more fragment tasks to send.");
+        None => {
+            info!("No more fragment tasks to send.");
+        }
     }
 }
 

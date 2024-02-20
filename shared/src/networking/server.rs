@@ -6,7 +6,14 @@ use tokio::sync::mpsc::Sender;
 
 use crate::{
     dtos::rendering_data::RenderingData,
-    models::{point::Point, range::Range, resolution::Resolution},
+    models::{
+        fractal::{fractal_descriptor::FractalDescriptor, julia::Julia, mandelbrot::Mandelbrot},
+        fragments::fragment_task::FragmentTask,
+        point::Point,
+        range::Range,
+        resolution::Resolution,
+        u8_data::U8Data,
+    },
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,19 +52,64 @@ pub struct Server {
     pub render_tx: Sender<RenderingData>,
     pub tiles: Arc<Mutex<Vec<Range>>>,
     pub range: Range,
+    pub current_fractal: usize,
+    pub fractals: Vec<FractalDescriptor>,
 }
 
 impl Server {
     pub fn new(config: ServerConfig, render_tx: Sender<RenderingData>) -> Self {
         let range = config.range;
         let tiles = Server::generate_tiles(&range, config.tiles);
+        let fractals: Vec<FractalDescriptor> = vec![
+            FractalDescriptor::Mandelbrot(Mandelbrot::new()),
+            FractalDescriptor::Julia(Julia::new(
+                complex_rs::complex::Complex {
+                    re: 0.285,
+                    im: 0.013,
+                },
+                4.0,
+            )),
+        ];
 
         Self {
             config,
             render_tx,
             tiles,
             range,
+            current_fractal: 0,
+            fractals,
         }
+    }
+
+    pub fn cycle_fractal(&mut self) {
+        self.current_fractal = (self.current_fractal + 1) % self.fractals.len();
+        self.regenerate_tiles();
+    }
+
+    pub fn create_fragment_task(&self) -> Option<FragmentTask> {
+        let config = &self.config;
+
+        if let Some(range) = self.get_random_tile() {
+            let id = U8Data::new(0, 16);
+            let fractal_descriptor = self.fractals[self.current_fractal].clone();
+            let max_iterations = 256;
+            let resolution = self.calculate_resolution(config.width, config.height, config.tiles);
+            let range = range;
+
+            Some(FragmentTask::new(
+                id,
+                fractal_descriptor,
+                max_iterations,
+                resolution,
+                range,
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn regenerate_tiles(&mut self) {
+        self.tiles = Server::generate_tiles(&self.range, self.config.tiles);
     }
 
     pub fn move_right(&mut self) {
@@ -88,7 +140,7 @@ impl Server {
         self.range.min.y += dy;
         self.range.max.y += dy;
 
-        self.tiles = Server::generate_tiles(&self.range, self.config.tiles);
+        self.regenerate_tiles();
     }
 
     pub fn zoom(&mut self, factor: f64) {
@@ -103,7 +155,7 @@ impl Server {
         self.range.min.y += dy;
         self.range.max.y -= dy;
 
-        self.tiles = Server::generate_tiles(&self.range, self.config.tiles);
+        self.regenerate_tiles();
     }
 
     pub fn get_random_tile(&self) -> Option<Range> {

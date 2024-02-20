@@ -3,7 +3,6 @@
 
 pub mod color;
 
-use error_iter::ErrorIter as _;
 use log::{error, info};
 use pixels::{Error, Pixels, SurfaceTexture};
 
@@ -16,10 +15,8 @@ use winit::window::WindowBuilder;
 use winit_input_helper::WinitInputHelper;
 
 use crate::dtos::rendering_data::RenderingData;
-use crate::models::fragments::fragment_result::FragmentResult;
 
 use crate::models::range::Range;
-use crate::models::resolution::Resolution;
 use crate::networking::server::Server;
 
 use self::color::PaletteHandler;
@@ -137,6 +134,10 @@ pub async fn launch_graphics_engine(
                 graphics_world.server.lock().unwrap().zoom(1.1); // Zoom out
             }
 
+            if input_helper.key_pressed(VirtualKeyCode::K) {
+                graphics_world.server.lock().unwrap().cycle_fractal();
+            }
+
             // TODO: C might be better to cycle through the fractal types
             if input_helper.key_pressed(VirtualKeyCode::C) {
                 graphics_world.cycle_color_palette();
@@ -160,6 +161,7 @@ impl GraphicsWorld {
 
     fn cycle_color_palette(&mut self) {
         self.palette.cycle_palette();
+        self.server.lock().unwrap().regenerate_tiles();
     }
 
     fn render(&self, frame_buffer: &mut [u8]) {
