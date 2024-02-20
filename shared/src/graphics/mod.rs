@@ -127,10 +127,10 @@ pub async fn launch_graphics_engine(
                 graphics_world.server.lock().unwrap().move_up();
             }
 
-            if input_helper.key_pressed(VirtualKeyCode::Plus) {
+            if input_helper.key_pressed(VirtualKeyCode::P) {
                 graphics_world.server.lock().unwrap().zoom(0.9); // Zoom in
             }
-            if input_helper.key_pressed(VirtualKeyCode::Minus) {
+            if input_helper.key_pressed(VirtualKeyCode::M) {
                 graphics_world.server.lock().unwrap().zoom(1.1); // Zoom out
             }
 

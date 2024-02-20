@@ -67,7 +67,14 @@ impl Server {
                     re: 0.285,
                     im: 0.013,
                 },
-                4.0,
+                2.0,
+            )),
+            FractalDescriptor::Julia(Julia::new(
+                complex_rs::complex::Complex {
+                    re: -0.9,
+                    im: 0.276015,
+                },
+                2.0,
             )),
         ];
 
