@@ -8,13 +8,11 @@ use shared::{
     dtos::rendering_data::RenderingData,
     graphics::launch_graphics_engine,
     models::{
-        fractal::{fractal_descriptor::FractalDescriptor, mandelbrot::Mandelbrot},
         fragments::{
             fragment::Fragment, fragment_request::FragmentRequest, fragment_result::FragmentResult,
             fragment_task::FragmentTask,
         },
         pixel::pixel_intensity::PixelIntensity,
-        u8_data::U8Data,
     },
     networking::{
         read_message_raw,

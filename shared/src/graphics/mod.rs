@@ -3,7 +3,7 @@
 
 pub mod color;
 
-use log::{error, info};
+use log::info;
 use pixels::{Error, Pixels, SurfaceTexture};
 
 use std::sync::{Arc, Mutex};

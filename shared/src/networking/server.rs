@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use complex_rs::complex::Complex;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};

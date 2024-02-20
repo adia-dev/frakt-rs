@@ -1,4 +1,4 @@
-use crate::models::fragments::{fragment_request::FragmentRequest, fragment_result::FragmentResult};
+use crate::models::fragments::fragment_result::FragmentResult;
 
 #[derive(Debug, Clone)]
 pub struct RenderingData {

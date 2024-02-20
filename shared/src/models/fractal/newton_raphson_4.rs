@@ -55,4 +55,3 @@ impl Fractal for NewtonRaphsonZ4 {
         return (zn, i as f64 * count);
     }
 }
-
