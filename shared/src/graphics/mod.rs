@@ -177,7 +177,7 @@ impl GraphicsWorld {
 
                     for y in 0..result.resolution.ny {
                         for x in 0..result.resolution.nx {
-                            let t = render_data.counts[(x + y * result.resolution.ny) as usize];
+                            let t = render_data.iterations[(x + y * result.resolution.ny) as usize];
                             self.draw_pixel(
                                 frame_buffer,
                                 self.canvas_width,

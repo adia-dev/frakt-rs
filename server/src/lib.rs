@@ -116,38 +116,24 @@ async fn process_fragment_result(
         return;
     }
 
-    let mut counts: Vec<f64> = Vec::new();
     let pixel_intensities: Vec<PixelIntensity> = data
         .chunks_exact(size_of::<PixelIntensity>())
         .filter_map(|chunk| {
-            if let Some(zn_bytes) = chunk.get(0..4).and_then(|bytes| bytes.try_into().ok()) {
-                if let Some(count_bytes) = chunk.get(4..8).and_then(|bytes| bytes.try_into().ok()) {
-                    let count = f32::from_be_bytes(count_bytes);
-
-                    counts.push(count as f64);
-
-                    return Some(PixelIntensity {
-                        zn: f32::from_be_bytes(zn_bytes),
-                        count,
-                    });
-                }
-            }
-            None
+            let zn_bytes = chunk.get(0..4)?.try_into().ok()?;
+            let count_bytes = chunk.get(4..8)?.try_into().ok()?;
+            Some(PixelIntensity {
+                zn: f32::from_be_bytes(zn_bytes),
+                count: f32::from_be_bytes(count_bytes),
+            })
         })
         .collect();
 
-    let pixels = pixel_intensities
-        .iter()
-        .map(|pi| {
-            let t = calculate_intensity(pi.count, pi.zn);
-            colorize_intensity(t)
-        })
-        .collect::<Vec<(u8, u8, u8)>>();
+    //NOTE: we currenlty only care about the count
+    let iterations: Vec<f64> = pixel_intensities.iter().map(|pi| pi.count as f64).collect();
 
     let rendering_data = RenderingData {
-        pixels,
         result,
-        counts,
+        iterations,
         worker: "adia-dev".to_owned(),
     };
 
@@ -196,27 +182,4 @@ async fn send_fragment_task(
     send_message(socket, task_json.as_bytes(), Some(&signature))
         .await
         .map_err(Into::into)
-}
-
-fn calculate_intensity(count: f32, zn: f32) -> f32 {
-    let t = (count - zn.log2().log2()) / 256.0;
-    t
-}
-
-fn colorize_intensity(t: f32) -> (u8, u8, u8) {
-    let normalized_t = (40.0 * t + 0.5) % 1.0;
-    color(normalized_t)
-}
-
-fn color(t: f32) -> (u8, u8, u8) {
-    let a = (0.910, 0.541, 0.988);
-    let b = (1.927, 0.211, 0.790);
-    let c = (1.285, 1.294, 0.802);
-    let d = (2.910, 4.973, 1.429);
-
-    let r = b.0 * (6.28318 * (c.0 * t + d.0)).cos() + a.0;
-    let g = b.1 * (6.28318 * (c.1 * t + d.1)).cos() + a.1;
-    let b = b.2 * (6.28318 * (c.2 * t + d.2)).cos() + a.2;
-
-    ((255.0 * r) as u8, (255.0 * g) as u8, (255.0 * b) as u8)
 }

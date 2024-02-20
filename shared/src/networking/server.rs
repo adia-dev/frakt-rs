@@ -10,7 +10,9 @@ use crate::{
     models::{
         fractal::{
             fractal_descriptor::FractalDescriptor, iterated_sin_z::IteratedSinZ, julia::Julia,
-            mandelbrot::Mandelbrot, newton_raphson_3::NewtonRaphsonZ3, newton_raphson_4::NewtonRaphsonZ4, nova_newton_raphson_z3::NovaNewtonRaphsonZ3, nova_newton_raphson_z4::NovaNewtonRaphsonZ4,
+            mandelbrot::Mandelbrot, newton_raphson_3::NewtonRaphsonZ3,
+            newton_raphson_4::NewtonRaphsonZ4, nova_newton_raphson_z3::NovaNewtonRaphsonZ3,
+            nova_newton_raphson_z4::NovaNewtonRaphsonZ4,
         },
         fragments::fragment_task::FragmentTask,
         point::Point,
@@ -80,14 +82,8 @@ impl Server {
                 },
                 2.0,
             )),
-            FractalDescriptor::IteratedSinZ(IteratedSinZ::new(Complex {
-                re: 1.0,
-                im: 0.3,
-            })),
-            FractalDescriptor::IteratedSinZ(IteratedSinZ::new(Complex {
-                re: 0.2,
-                im: 1.0,
-            })),
+            FractalDescriptor::IteratedSinZ(IteratedSinZ::new(Complex { re: 1.0, im: 0.3 })),
+            FractalDescriptor::IteratedSinZ(IteratedSinZ::new(Complex { re: 0.2, im: 1.0 })),
             FractalDescriptor::NewtonRaphsonZ3(NewtonRaphsonZ3::new()),
             FractalDescriptor::NewtonRaphsonZ4(NewtonRaphsonZ4::new()),
             FractalDescriptor::NovaNewtonRapshonZ3(NovaNewtonRaphsonZ3::new()),
@@ -115,6 +111,7 @@ impl Server {
         if let Some(range) = self.get_random_tile() {
             let id = U8Data::new(0, 16);
             let fractal_descriptor = self.fractals[self.current_fractal].clone();
+            // TODO: the max iterations should change based on the current fractal
             let max_iterations = 256;
             let resolution = self.calculate_resolution(config.width, config.height, config.tiles);
             let range = range;
