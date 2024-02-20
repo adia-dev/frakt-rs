@@ -111,9 +111,15 @@ impl FragmentTask {
             }
             FractalDescriptor::NewtonRaphsonZ3(newton_raphson_3) => {
                 newton_raphson_3.generate(self.max_iteration, x, y)
-            }
+            },
             FractalDescriptor::NewtonRaphsonZ4(newton_raphson_4) => {
                 newton_raphson_4.generate(self.max_iteration, x, y)
+            },
+            FractalDescriptor::NovaNewtonRapshonZ3(nova_newton_raphson) => {
+                nova_newton_raphson.generate(self.max_iteration, x, y)
+            }
+            FractalDescriptor::NovaNewtonRapshonZ4(nova_newton_raphson) => {
+                nova_newton_raphson.generate(self.max_iteration, x, y)
             }
         }
     }

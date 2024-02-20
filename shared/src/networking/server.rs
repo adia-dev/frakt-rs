@@ -10,7 +10,7 @@ use crate::{
     models::{
         fractal::{
             fractal_descriptor::FractalDescriptor, iterated_sin_z::IteratedSinZ, julia::Julia,
-            mandelbrot::Mandelbrot, newton_raphson_3::NewtonRaphsonZ3, newton_raphson_4::NewtonRaphsonZ4,
+            mandelbrot::Mandelbrot, newton_raphson_3::NewtonRaphsonZ3, newton_raphson_4::NewtonRaphsonZ4, nova_newton_raphson_z3::NovaNewtonRaphsonZ3, nova_newton_raphson_z4::NovaNewtonRaphsonZ4,
         },
         fragments::fragment_task::FragmentTask,
         point::Point,
@@ -90,6 +90,8 @@ impl Server {
             })),
             FractalDescriptor::NewtonRaphsonZ3(NewtonRaphsonZ3::new()),
             FractalDescriptor::NewtonRaphsonZ4(NewtonRaphsonZ4::new()),
+            FractalDescriptor::NovaNewtonRapshonZ3(NovaNewtonRaphsonZ3::new()),
+            FractalDescriptor::NovaNewtonRapshonZ4(NovaNewtonRaphsonZ4::new()),
         ];
 
         Self {
