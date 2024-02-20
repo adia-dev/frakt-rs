@@ -153,7 +153,7 @@ async fn process_fragment_request(
     );
     trace!("FragmentRequest details: {:?}", request);
     let task = {
-        let server = server.lock().unwrap();
+        let mut server = server.lock().unwrap();
         server.create_fragment_task()
     };
 

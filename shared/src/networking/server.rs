@@ -56,7 +56,7 @@ impl ServerConfig {
 pub struct Server {
     pub config: ServerConfig,
     pub render_tx: Sender<RenderingData>,
-    pub tiles: Arc<Mutex<Vec<Range>>>,
+    pub tiles: Vec<Range>,
     pub range: Range,
     pub current_fractal: usize,
     pub fractals: Vec<FractalDescriptor>,
@@ -105,8 +105,8 @@ impl Server {
         self.regenerate_tiles();
     }
 
-    pub fn create_fragment_task(&self) -> Option<FragmentTask> {
-        let config = &self.config;
+    pub fn create_fragment_task(&mut self) -> Option<FragmentTask> {
+        let config = self.config.clone();
 
         if let Some(range) = self.get_random_tile() {
             let id = U8Data::new(0, 16);
@@ -178,14 +178,13 @@ impl Server {
         self.regenerate_tiles();
     }
 
-    pub fn get_random_tile(&self) -> Option<Range> {
-        let mut tiles = self.tiles.lock().unwrap();
-        if tiles.is_empty() {
+    pub fn get_random_tile(&mut self) -> Option<Range> {
+        if self.tiles.is_empty() {
             None
         } else {
             let mut rng = thread_rng();
-            let len = tiles.len();
-            tiles.remove(rng.gen_range(0..len)).into()
+            let len = self.tiles.len();
+            self.tiles.remove(rng.gen_range(0..len)).into()
         }
     }
 
@@ -212,13 +211,13 @@ impl Server {
         Range::new(min, max)
     }
 
-    fn generate_tiles(range: &Range, count: u32) -> Arc<Mutex<Vec<Range>>> {
+    fn generate_tiles(range: &Range, count: u32) -> Vec<Range> {
         let mut ranges = Vec::new();
         for i in 0..(count * count) {
             let range = Server::calculate_range(i as u8, count, range);
             ranges.push(range);
         }
 
-        Arc::new(Mutex::new(ranges))
+        ranges
     }
 }
