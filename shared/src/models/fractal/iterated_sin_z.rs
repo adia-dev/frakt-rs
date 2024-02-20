@@ -1,13 +1,21 @@
 use complex_rs::complex::Complex;
 use serde::{Deserialize, Serialize};
 
+use super::fractal::Fractal;
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct IteratedSinZ {
     pub c: Complex,
 }
 
 impl IteratedSinZ {
-    pub fn generate(&self, max_iterations: u32, x: f64, y: f64) -> (f64, f64) {
+    pub fn new(c: Complex) -> Self {
+        Self { c }
+    }
+}
+
+impl Fractal for IteratedSinZ {
+    fn generate(&self, max_iterations: u32, x: f64, y: f64) -> (f64, f64) {
         let mut z = Complex::new(x, y);
 
         let mut i = 0;

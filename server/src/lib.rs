@@ -183,29 +183,6 @@ async fn process_fragment_request(
     }
 }
 
-async fn create_fragment_task(server: Arc<Mutex<Server>>) -> Option<FragmentTask> {
-    let server = server.lock().unwrap();
-    let config = server.config.clone();
-
-    if let Some(range) = server.get_random_tile() {
-        let id = U8Data::new(0, 16);
-        let fractal_descriptor = FractalDescriptor::Mandelbrot(Mandelbrot::new());
-        let max_iterations = 256;
-        let resolution = server.calculate_resolution(config.width, config.height, config.tiles);
-        let range = range;
-
-        Some(FragmentTask::new(
-            id,
-            fractal_descriptor,
-            max_iterations,
-            resolution,
-            range,
-        ))
-    } else {
-        None
-    }
-}
-
 async fn send_fragment_task(
     socket: &mut TcpStream,
     worker_name: &str,

@@ -1,6 +1,5 @@
 use crate::models::{
-    fractal::fractal::Fractal,
-    fractal::fractal_descriptor::FractalDescriptor,
+    fractal::{fractal::Fractal, fractal_descriptor::FractalDescriptor, newton_raphson_4},
     pixel::{pixel_data::PixelData, pixel_intensity::PixelIntensity},
     range::Range,
     resolution::Resolution,
@@ -110,8 +109,12 @@ impl FragmentTask {
             FractalDescriptor::IteratedSinZ(iterated_sin_z) => {
                 iterated_sin_z.generate(self.max_iteration, x, y)
             }
-            FractalDescriptor::NewtonRaphsonZ3(_) => todo!(),
-            FractalDescriptor::NewtonRaphsonZ4(_) => todo!(),
+            FractalDescriptor::NewtonRaphsonZ3(newton_raphson_3) => {
+                newton_raphson_3.generate(self.max_iteration, x, y)
+            }
+            FractalDescriptor::NewtonRaphsonZ4(newton_raphson_4) => {
+                newton_raphson_4.generate(self.max_iteration, x, y)
+            }
         }
     }
 }

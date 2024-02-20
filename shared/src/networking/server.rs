@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex};
 
+use complex_rs::complex::Complex;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
@@ -7,7 +8,10 @@ use tokio::sync::mpsc::Sender;
 use crate::{
     dtos::rendering_data::RenderingData,
     models::{
-        fractal::{fractal_descriptor::FractalDescriptor, julia::Julia, mandelbrot::Mandelbrot},
+        fractal::{
+            fractal_descriptor::FractalDescriptor, iterated_sin_z::IteratedSinZ, julia::Julia,
+            mandelbrot::Mandelbrot, newton_raphson_3::NewtonRaphsonZ3, newton_raphson_4::NewtonRaphsonZ4,
+        },
         fragments::fragment_task::FragmentTask,
         point::Point,
         range::Range,
@@ -76,6 +80,16 @@ impl Server {
                 },
                 2.0,
             )),
+            FractalDescriptor::IteratedSinZ(IteratedSinZ::new(Complex {
+                re: 1.0,
+                im: 0.3,
+            })),
+            FractalDescriptor::IteratedSinZ(IteratedSinZ::new(Complex {
+                re: 0.2,
+                im: 1.0,
+            })),
+            FractalDescriptor::NewtonRaphsonZ3(NewtonRaphsonZ3::new()),
+            FractalDescriptor::NewtonRaphsonZ4(NewtonRaphsonZ4::new()),
         ];
 
         Self {
