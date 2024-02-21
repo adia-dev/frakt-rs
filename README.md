@@ -9,7 +9,9 @@ You can find the specific requirements for the original project in this
 
 Fractal Renderer is a high-performance, distributed system for generating and visualizing complex fractals in real-time. Built with Rust, it leverages the power of asynchronous programming and network communication to create stunning fractal images. The system supports various fractal types, including Mandelbrot, Julia sets, and Newton-Raphson, and offers customizable color palettes for vivid visualization. It also supports distributed workers for scalable fractal generation and interactive controls for real-time interaction with the fractal rendering.
 
-![Mandelbrot](./assets/images/newton_raphson.png)
+![Demo](./assets/videos/demo.gif)
+
+![Newton Raphson](./assets/images/newton_raphson.png)
 
 ## ✨ Features
 
