@@ -3,7 +3,7 @@
 This project is originally a school group project that I have decided to explore further and make it my own. The original project was a distributed system for generating and visualizing complex fractals in real-time. The project was built with Rust.
 
 You can find the specific requirements for the original project in this
-![repo](https://github.com/haveneer-training/frakt)
+[repository](https://github.com/haveneer-training/frakt).
 
 ## 📖 Overview
 
