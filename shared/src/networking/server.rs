@@ -1,3 +1,5 @@
+use std::{collections::HashMap, net::SocketAddr};
+
 use complex_rs::complex::Complex;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -19,6 +21,8 @@ use crate::{
         u8_data::U8Data,
     },
 };
+
+use super::worker::Worker;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
@@ -58,11 +62,13 @@ pub struct Server {
     pub range: Range,
     pub current_fractal: usize,
     pub fractals: Vec<FractalDescriptor>,
+    pub workers: HashMap<SocketAddr, Worker>,
 }
 
 impl Server {
     pub fn new(config: ServerConfig, render_tx: Sender<RenderingData>) -> Self {
         let range = config.range;
+        let workers: HashMap<SocketAddr, Worker> = HashMap::new();
         let tiles = Server::generate_tiles(&range, config.tiles);
         let fractals: Vec<FractalDescriptor> = vec![
             FractalDescriptor::Mandelbrot(Mandelbrot::new()),
@@ -95,12 +101,21 @@ impl Server {
             range,
             current_fractal: 0,
             fractals,
+            workers,
         }
     }
 
     pub fn cycle_fractal(&mut self) {
         self.current_fractal = (self.current_fractal + 1) % self.fractals.len();
         self.regenerate_tiles();
+    }
+
+    pub fn register_worker(&mut self, addr: SocketAddr, worker: Worker) {
+        self.workers.insert(addr, worker);
+    }
+
+    pub fn get_worker(&self, addr: &SocketAddr) -> Option<&Worker> {
+        self.workers.get(addr)
     }
 
     pub fn create_fragment_task(&mut self) -> Option<FragmentTask> {

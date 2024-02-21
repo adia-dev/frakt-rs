@@ -1,9 +1,12 @@
 use std::{
     mem::size_of,
+    net::SocketAddr,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
 use log::{debug, error, info, trace};
+use serde_json::ser;
 use shared::{
     dtos::rendering_data::RenderingData,
     graphics::launch_graphics_engine,
@@ -19,6 +22,7 @@ use shared::{
         result::NetworkingResult,
         send_message,
         server::{Server, ServerConfig},
+        worker::Worker,
     },
 };
 use tokio::{
@@ -46,7 +50,17 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
         server.clone(),
         render_tx.clone(),
     ));
-    let graphics_handler = launch_graphics_engine(server, render_rx);
+    let graphics_handler = launch_graphics_engine(server.clone(), render_rx);
+
+    // tokio::spawn(async move {
+    //     loop {
+    //         let server = server.clone();
+    //         let server = server.lock().unwrap();
+    //         debug!("{:#?}", server.workers);
+
+    //         _ = tokio::time::sleep(Duration::from_secs(5));
+    //     }
+    // });
 
     let _ = tokio::join!(connection_handler, graphics_handler);
 
@@ -68,15 +82,21 @@ async fn handle_connections(
     render_tx: Sender<RenderingData>,
 ) {
     info!("Starting to handle incoming connections.");
-    while let Ok((socket, _)) = listener.accept().await {
+    while let Ok((socket, socket_addr)) = listener.accept().await {
         debug!("Accepted new connection.");
         let tx_clone = render_tx.clone();
-        tokio::spawn(handle_connection(socket, server.clone(), tx_clone));
+        tokio::spawn(handle_connection(
+            socket,
+            socket_addr,
+            server.clone(),
+            tx_clone,
+        ));
     }
 }
 
 async fn handle_connection(
     mut socket: TcpStream,
+    socket_addr: SocketAddr,
     server: Arc<Mutex<Server>>,
     render_tx: Sender<RenderingData>,
 ) {
@@ -95,10 +115,17 @@ async fn handle_connection(
 
     if let Ok(fragment_result) = FragmentResult::from_json(&raw_message.json_message) {
         debug!("Processing FragmentResult.");
-        process_fragment_result(fragment_result, &raw_message.data, render_tx).await;
+        process_fragment_result(
+            fragment_result,
+            &raw_message.data,
+            render_tx,
+            socket_addr,
+            server,
+        )
+        .await;
     } else if let Ok(request) = FragmentRequest::from_json(&raw_message.json_message) {
         debug!("Processing FragmentRequest.");
-        process_fragment_request(request, server.clone(), &mut socket).await;
+        process_fragment_request(request, server.clone(), &mut socket, socket_addr).await;
     }
 }
 
@@ -106,9 +133,14 @@ async fn process_fragment_result(
     result: FragmentResult,
     data: &[u8],
     render_tx: Sender<RenderingData>,
+    socket_addr: SocketAddr,
+    server: Arc<Mutex<Server>>,
 ) {
     info!("Processing received FragmentResult.");
     trace!("FragmentResult details: {:?}", result);
+    
+    // Skip the first 16 bytes of the data
+    let data = &data[16..];
     if data.len() % size_of::<PixelIntensity>() != 0 {
         error!("Data size is not aligned with PixelIntensity size.");
         return;
@@ -129,10 +161,19 @@ async fn process_fragment_result(
     //NOTE: we currenlty only care about the count
     let iterations: Vec<f64> = pixel_intensities.iter().map(|pi| pi.count as f64).collect();
 
+    let worker = {
+        let server = server.lock().unwrap();
+        if let Some(worker) = server.get_worker(&socket_addr) {
+            worker.name.to_string()
+        } else {
+            "[unknown worker]".to_string()
+        }
+    };
+
     let rendering_data = RenderingData {
         result,
         iterations,
-        worker: "adia-dev".to_owned(),
+        worker,
     };
 
     if let Err(e) = render_tx.send(rendering_data).await {
@@ -144,6 +185,7 @@ async fn process_fragment_request(
     request: FragmentRequest,
     server: Arc<Mutex<Server>>,
     socket: &mut TcpStream,
+    socket_addr: SocketAddr,
 ) {
     info!(
         "Received FragmentRequest for worker: {}",
@@ -152,6 +194,14 @@ async fn process_fragment_request(
     trace!("FragmentRequest details: {:?}", request);
     let task = {
         let mut server = server.lock().unwrap();
+
+        let worker = Worker::new(
+            request.worker_name.to_string(),
+            request.maximal_work_load,
+            server.config.address.to_string(),
+            server.config.port,
+        );
+        server.register_worker(socket_addr, worker);
         server.create_fragment_task()
     };
 
