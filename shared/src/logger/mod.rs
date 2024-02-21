@@ -21,7 +21,7 @@ pub fn init_with_level(level_filter: &str) {
                 Level::Warn => level.to_string().yellow(),
                 Level::Info => level.to_string().cyan(),
                 Level::Debug => level.to_string().purple(),
-                Level::Trace => level.to_string().normal(),
+                Level::Trace => level.to_string().magenta(),
             };
             writeln!(buf, "{} {} {}", timestamp, level_colored, record.args())
         })
