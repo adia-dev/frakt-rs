@@ -1,9 +1,9 @@
 pub mod dtos;
 pub mod env;
-pub mod graphics;
 pub mod logger;
 pub mod models;
 pub mod networking;
+pub mod rendering;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

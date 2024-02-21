@@ -23,10 +23,10 @@ use self::color::PaletteHandler;
 
 type SharedRenderingData = Arc<Vec<Mutex<Option<RenderingData>>>>;
 
-struct GraphicsWorld {
+struct World {
     server: Arc<Mutex<Server>>,
-    canvas_width: u32,
-    canvas_height: u32,
+    width: u32,
+    height: u32,
     rendering_data_shards: SharedRenderingData,
     palette: PaletteHandler,
 }
@@ -43,7 +43,7 @@ pub async fn launch_graphics_engine(
     let event_loop = EventLoop::new();
     let mut input_helper = WinitInputHelper::new();
 
-    let (canvas_width, canvas_height) = {
+    let (width, height) = {
         let server = server.lock().unwrap();
         let width = server.config.width;
         let height = server.config.height;
@@ -51,10 +51,10 @@ pub async fn launch_graphics_engine(
     };
 
     let rendering_data = initialize_shared_data(10);
-    let mut graphics_world = GraphicsWorld {
+    let mut graphics_world = World {
         server,
-        canvas_width,
-        canvas_height,
+        width,
+        height,
         rendering_data_shards: rendering_data.clone(),
         palette: PaletteHandler::new(),
     };
@@ -75,10 +75,7 @@ pub async fn launch_graphics_engine(
     });
 
     let window = {
-        let size = LogicalSize::new(
-            graphics_world.canvas_width as f64,
-            graphics_world.canvas_height as f64,
-        );
+        let size = LogicalSize::new(graphics_world.width as f64, graphics_world.height as f64);
         WindowBuilder::new()
             .with_title("Frakt")
             .with_inner_size(size)
@@ -90,11 +87,7 @@ pub async fn launch_graphics_engine(
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(
-            graphics_world.canvas_width,
-            graphics_world.canvas_height,
-            surface_texture,
-        )?
+        Pixels::new(graphics_world.width, graphics_world.height, surface_texture)?
     };
 
     event_loop.run(move |event, _, control_flow| {
@@ -156,7 +149,7 @@ pub async fn launch_graphics_engine(
     });
 }
 
-impl GraphicsWorld {
+impl World {
     fn update(&mut self) {}
 
     fn cycle_color_palette(&mut self) {
@@ -180,7 +173,7 @@ impl GraphicsWorld {
                             let t = render_data.iterations[(x + y * result.resolution.ny) as usize];
                             self.draw_pixel(
                                 frame_buffer,
-                                self.canvas_width,
+                                self.width,
                                 start_x + x as u32,
                                 start_y + y as u32,
                                 t,
@@ -201,16 +194,16 @@ impl GraphicsWorld {
             min: server_min,
             max: server_max,
         } = server.range;
-        let x = ((range.min.x - server_min.x) / (server_max.x - server_min.x)
-            * self.canvas_width as f64) as u32;
-        let y = ((range.min.y - server_min.y) / (server_max.y - server_min.y)
-            * self.canvas_height as f64) as u32;
+        let x = ((range.min.x - server_min.x) / (server_max.x - server_min.x) * self.width as f64)
+            as u32;
+        let y = ((range.min.y - server_min.y) / (server_max.y - server_min.y) * self.height as f64)
+            as u32;
 
         (x, y)
     }
 
-    fn draw_pixel(&self, frame_buffer: &mut [u8], canvas_width: u32, x: u32, y: u32, t: f64) {
-        let index = ((y * canvas_width + x) * 4) as usize;
+    fn draw_pixel(&self, frame_buffer: &mut [u8], width: u32, x: u32, y: u32, t: f64) {
+        let index = ((y * width + x) * 4) as usize;
 
         if index + 3 < frame_buffer.len() {
             let (r, g, b) = self.palette.calculate_color(t);

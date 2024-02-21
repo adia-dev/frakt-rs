@@ -2,14 +2,12 @@ use std::{
     mem::size_of,
     net::SocketAddr,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use log::{debug, error, info, trace};
-use serde_json::ser;
+
 use shared::{
     dtos::rendering_data::RenderingData,
-    graphics::launch_graphics_engine,
     models::{
         fragments::{
             fragment::Fragment, fragment_request::FragmentRequest, fragment_result::FragmentResult,
@@ -24,6 +22,7 @@ use shared::{
         server::{Server, ServerConfig},
         worker::Worker,
     },
+    rendering::launch_graphics_engine,
 };
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -138,7 +137,7 @@ async fn process_fragment_result(
 ) {
     info!("Processing received FragmentResult.");
     trace!("FragmentResult details: {:?}", result);
-    
+
     // Skip the first 16 bytes of the data
     let data = &data[16..];
     if data.len() % size_of::<PixelIntensity>() != 0 {

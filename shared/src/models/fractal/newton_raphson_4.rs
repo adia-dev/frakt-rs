@@ -1,7 +1,7 @@
 use complex_rs::complex::Complex;
 use serde::{Deserialize, Serialize};
 
-use super::fractal::Fractal;
+use super::{fractal::Fractal, utils};
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy)]
 pub struct NewtonRaphsonZ4 {}
@@ -17,15 +17,6 @@ impl NewtonRaphsonZ4 {
 
     fn dfz(&self, z: Complex) -> Complex {
         Complex::new(4.0, 0.0) * z * z * z
-    }
-
-    fn convergence_value(pzn: f64, threshold: f64, count: u32, nmax: u32) -> f64 {
-        let accuracy = f64::log10(threshold);
-        if count < nmax {
-            0.5 - 0.5 * f64::cos(0.1 * (count as f64 - (f64::log10(pzn) / accuracy)))
-        } else {
-            1.0
-        }
     }
 }
 
@@ -47,7 +38,7 @@ impl Fractal for NewtonRaphsonZ4 {
 
         let zn = z.arg();
         let count = if i < max_iterations {
-            NewtonRaphsonZ4::convergence_value(z.arg_sq(), epsilon, i, max_iterations)
+            utils::convergence_value(z.arg_sq(), epsilon, i, max_iterations)
         } else {
             1.0
         };
