@@ -131,9 +131,13 @@ pub async fn launch_graphics_engine(
                 graphics_world.server.lock().unwrap().cycle_fractal();
             }
 
-            // TODO: C might be better to cycle through the fractal types
-            if input_helper.key_pressed(VirtualKeyCode::C) {
-                graphics_world.cycle_color_palette();
+            if input_helper.key_pressed(VirtualKeyCode::L) {
+                graphics_world.cycle_color_palette_forward();
+                window.request_redraw();
+            }
+
+            if input_helper.key_pressed(VirtualKeyCode::J) {
+                graphics_world.cycle_color_palette_backward();
                 window.request_redraw();
             }
 
@@ -152,8 +156,13 @@ pub async fn launch_graphics_engine(
 impl World {
     fn update(&mut self) {}
 
-    fn cycle_color_palette(&mut self) {
-        self.palette.cycle_palette();
+    fn cycle_color_palette_forward(&mut self) {
+        self.palette.cycle_palette_forward();
+        self.server.lock().unwrap().regenerate_tiles();
+    }
+
+    fn cycle_color_palette_backward(&mut self) {
+        self.palette.cycle_palette_backward();
         self.server.lock().unwrap().regenerate_tiles();
     }
 
