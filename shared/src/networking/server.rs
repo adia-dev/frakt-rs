@@ -37,7 +37,14 @@ pub struct ServerConfig {
 }
 
 impl ServerConfig {
-    pub fn new(address: String, port: u16, width: u32, height: u32, tiles: u32, portal: bool) -> Self {
+    pub fn new(
+        address: String,
+        port: u16,
+        width: u32,
+        height: u32,
+        tiles: u32,
+        portal: bool,
+    ) -> Self {
         let min = Point::new(-1.2, -1.2);
         let max = Point::new(1.2, 1.2);
         let range = Range::new(min, max);
@@ -51,7 +58,7 @@ impl ServerConfig {
             tiles,
             range,
             speed,
-            portal
+            portal,
         }
     }
 }

@@ -29,7 +29,6 @@ use shared::{
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::{self, Sender},
-    task::JoinHandle,
 };
 
 use crate::portal::run_portal;
@@ -48,7 +47,7 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
 
     let (render_tx, render_rx) = mpsc::channel::<RenderingData>(32);
     let (portal_request_tx, mut portal_request_rx) = mpsc::channel::<FragmentRequest>(32);
-    let (portal_data_tx, mut portal_data_rx) = mpsc::channel::<RenderingData>(32);
+    let (portal_data_tx, portal_data_rx) = mpsc::channel::<RenderingData>(32);
     let server = create_server(config, &render_tx);
 
     let connection_handler = tokio::spawn(handle_connections(

@@ -2,7 +2,9 @@ use std::sync::{Arc, Mutex};
 
 use actix_web::{web, App, HttpServer};
 use log::info;
-use shared::{dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest};
+use shared::{
+    dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest,
+};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::portal::ws::handlers::websocket_route;

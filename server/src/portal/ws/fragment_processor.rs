@@ -1,8 +1,10 @@
-use actix::{Actor, AsyncContext, Handler, Message, StreamHandler, Context, Addr};
-use actix_web_actors::ws::{self, WebsocketContext, Message as WsMessage, ProtocolError};
-use shared::{dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest};
+use actix::{Actor, AsyncContext, StreamHandler};
+use actix_web_actors::ws::{self};
+use shared::{
+    dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest,
+};
 use std::sync::{Arc, Mutex};
-use tokio::sync::mpsc::{Sender, Receiver};
+use tokio::sync::mpsc::{Receiver, Sender};
 
 use super::messages::rendering_data::RenderingDataMessage;
 
@@ -42,7 +44,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsFragmentProcess
         }
     }
 }
-
 
 impl Actor for WsFragmentProcessor {
     type Context = ws::WebsocketContext<Self>;

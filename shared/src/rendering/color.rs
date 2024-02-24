@@ -47,7 +47,7 @@ pub struct PaletteHandler {
 impl PaletteHandler {
     pub fn new() -> Self {
         PaletteHandler {
-            current_palette: ColorPalette::Classic, 
+            current_palette: ColorPalette::Classic,
         }
     }
 
@@ -102,7 +102,7 @@ impl PaletteHandler {
                 0 => a.0 + b.0 * (6.283185 * (c.0 * t + d.0)).cos(),
                 1 => a.1 + b.1 * (6.283185 * (c.1 * t + d.1)).cos(),
                 2 => a.2 + b.2 * (6.283185 * (c.2 * t + d.2)).cos(),
-                _ => 0.0, 
+                _ => 0.0,
             }
         };
 
@@ -137,7 +137,7 @@ impl PaletteHandler {
                 vec3(1.0, 1.0, 1.0),
                 vec3(0.00, 0.10, 0.20),
             ),
-            _ => (0, 0, 0), 
+            _ => (0, 0, 0),
         }
     }
 
