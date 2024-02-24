@@ -61,6 +61,7 @@ pub struct Server {
     pub config: ServerConfig,
     pub render_tx: Sender<RenderingData>,
     pub tiles: Vec<Range>,
+    pub tasks_queue: Vec<FragmentTask>,
     pub range: Range,
     pub current_fractal: usize,
     pub fractals: Vec<FractalDescriptor>,
@@ -71,6 +72,7 @@ impl Server {
     pub fn new(config: ServerConfig, render_tx: Sender<RenderingData>) -> Self {
         let range = config.range;
         let workers: HashMap<SocketAddr, Worker> = HashMap::new();
+        let tasks_queue = Vec::new();
         let tiles = Server::generate_tiles(&range, config.tiles);
         let fractals: Vec<FractalDescriptor> = vec![
             FractalDescriptor::Mandelbrot(Mandelbrot::new()),
@@ -100,6 +102,7 @@ impl Server {
             config,
             render_tx,
             tiles,
+            tasks_queue,
             range,
             current_fractal: 0,
             fractals,
@@ -114,6 +117,14 @@ impl Server {
 
     pub fn register_worker(&mut self, addr: SocketAddr, worker: Worker) {
         self.workers.insert(addr, worker);
+    }
+
+    pub fn enqueue_task(&mut self, task: FragmentTask) {
+        self.tasks_queue.push(task);
+    }
+
+    pub fn dequeue_task(&mut self) -> Option<FragmentTask> {
+        self.tasks_queue.pop()
     }
 
     pub fn get_worker(&self, addr: &SocketAddr) -> Option<&Worker> {

@@ -1,6 +1,8 @@
+use serde::{Deserialize, Serialize};
+
 use crate::models::fragments::fragment_result::FragmentResult;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderingData {
     pub result: FragmentResult,
     pub worker: String,

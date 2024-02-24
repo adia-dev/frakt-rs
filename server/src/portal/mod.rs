@@ -1,58 +1,35 @@
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
-use actix_cors::Cors;
-use actix_web::{get, middleware::Logger, post, web, App, HttpResponse, HttpServer, Responder};
+use std::sync::{Arc, Mutex};
+
+use actix_web::{web, App, HttpServer};
 use log::info;
+use shared::{dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest};
+use tokio::sync::mpsc::{Receiver, Sender};
 
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
-}
+use crate::portal::ws::handlers::websocket_route;
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
-}
+pub mod ws;
 
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
+pub async fn run_portal(
+    tx: Sender<FragmentRequest>,
+    rx: Receiver<RenderingData>,
+) -> std::io::Result<()> {
+    info!("🌀 Starting the Portal websocket server");
+    let rx = Arc::new(Mutex::new(rx));
 
-pub async fn run_portal() -> std::io::Result<()> {
-    info!("🌀 Portal launched at localhost:8686");
-
-    let server = HttpServer::new(|| {
+    let server = HttpServer::new(move || {
         App::new()
-            .wrap(Logger::default())
-            .wrap(Cors::permissive())
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
+            .app_data(web::Data::new(tx.clone()))
+            .app_data(web::Data::new(rx.clone()))
+            .route("/ws/", web::get().to(websocket_route))
     })
-    .bind(("127.0.0.1", 8686))?
+    .bind("127.0.0.1:8686")?
     .run();
 
-    let server_handle = server.handle();
-    let task_shutdown_marker = Arc::new(AtomicBool::new(false));
-
-    let server_task = tokio::spawn(async move {
-        let _ = server.await;
+    let server_handle = tokio::spawn(async move {
+        _ = server.await;
     });
 
-    tokio::spawn(async move {
-        // Listen for ctrl-c
-        tokio::signal::ctrl_c().await.expect("Failed to listen for ctrl+c signal");
-
-        // Start shutdown of tasks
-        server_handle.stop(true).await;
-        task_shutdown_marker.store(true, Ordering::SeqCst);
-    });
-
-    // Await server task completion
-    server_task.await.expect("Server task failed");
+    _ = tokio::try_join!(server_handle);
 
     Ok(())
 }
-

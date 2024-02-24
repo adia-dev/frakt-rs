@@ -47,12 +47,15 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
     info!("Server is listening on {}", server_address);
 
     let (render_tx, render_rx) = mpsc::channel::<RenderingData>(32);
+    let (portal_request_tx, mut portal_request_rx) = mpsc::channel::<FragmentRequest>(32);
+    let (portal_data_tx, mut portal_data_rx) = mpsc::channel::<RenderingData>(32);
     let server = create_server(config, &render_tx);
 
     let connection_handler = tokio::spawn(handle_connections(
         listener,
         server.clone(),
         render_tx.clone(),
+        portal_data_tx.clone(),
     ));
     let graphics_handler = launch_graphics_engine(server.clone(), render_rx);
 
@@ -68,7 +71,13 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
 
     if config.portal {
         tokio::spawn(async move {
-            _ = run_portal().await;
+            _ = run_portal(portal_request_tx, portal_data_rx).await;
+        });
+        tokio::spawn(async move {
+            while let Some(request) = portal_request_rx.recv().await {
+                debug!("Processing FragmentRequest.");
+                process_portal_fragment_request(request, server.clone()).await;
+            }
         });
     }
 
@@ -90,16 +99,19 @@ async fn handle_connections(
     listener: TcpListener,
     server: Arc<Mutex<Server>>,
     render_tx: Sender<RenderingData>,
+    portal_data_tx: Sender<RenderingData>,
 ) {
     info!("Starting to handle incoming connections.");
     while let Ok((socket, socket_addr)) = listener.accept().await {
         debug!("Accepted new connection.");
-        let tx_clone = render_tx.clone();
+        let render_tx = render_tx.clone();
+        let portal_data_tx = portal_data_tx.clone();
         tokio::spawn(handle_connection(
             socket,
             socket_addr,
             server.clone(),
-            tx_clone,
+            render_tx,
+            portal_data_tx,
         ));
     }
 }
@@ -109,6 +121,7 @@ async fn handle_connection(
     socket_addr: SocketAddr,
     server: Arc<Mutex<Server>>,
     render_tx: Sender<RenderingData>,
+    portal_data_tx: Sender<RenderingData>,
 ) {
     debug!("Initiating connection handling.");
     let raw_message = match read_message_raw(&mut socket).await {
@@ -129,6 +142,7 @@ async fn handle_connection(
             fragment_result,
             &raw_message.data,
             render_tx,
+            portal_data_tx,
             socket_addr,
             server,
         )
@@ -143,6 +157,7 @@ async fn process_fragment_result(
     result: FragmentResult,
     data: &[u8],
     render_tx: Sender<RenderingData>,
+    portal_data_tx: Sender<RenderingData>,
     socket_addr: SocketAddr,
     server: Arc<Mutex<Server>>,
 ) {
@@ -186,8 +201,28 @@ async fn process_fragment_result(
         worker,
     };
 
+    if let Err(e) = portal_data_tx.send(rendering_data.clone()).await {
+        error!("Failed to send rendering data to the portal: {}", e);
+    } else {
+        info!("🌀 Sent rendering data to the portal");
+    }
+
     if let Err(e) = render_tx.send(rendering_data).await {
         error!("Failed to send rendering data: {}", e);
+    }
+}
+
+async fn process_portal_fragment_request(request: FragmentRequest, server: Arc<Mutex<Server>>) {
+    info!("Received FragmentRequest from the portal");
+    trace!("FragmentRequest details: {:?}", request);
+    let mut server = server.lock().unwrap();
+
+    match server.create_fragment_task() {
+        Some(task) => {
+            info!("Task queued: {:?}", task);
+            server.enqueue_task(task);
+        }
+        None => {}
     }
 }
 
@@ -212,7 +247,11 @@ async fn process_fragment_request(
             server.config.port,
         );
         server.register_worker(socket_addr, worker);
-        server.create_fragment_task()
+
+        match server.dequeue_task() {
+            Some(task) => Some(task),
+            None => server.create_fragment_task(),
+        }
     };
 
     match task {
