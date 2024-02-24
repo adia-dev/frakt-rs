@@ -53,7 +53,8 @@ async fn run_server(args: ServerCommand) {
     let width = args.width.unwrap_or(300);
     let height = args.height.unwrap_or(300);
     let tiles = args.tiles.unwrap_or(4);
+    let portal = args.portal.unwrap_or(false);
 
-    let server_config = ServerConfig::new(address, port, width, height, tiles);
+    let server_config = ServerConfig::new(address, port, width, height, tiles, portal);
     server::run_graphics_server(&server_config).await;
 }

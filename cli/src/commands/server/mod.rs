@@ -63,4 +63,9 @@ pub struct ServerCommand {
     /// TODO: Add description for the graphical mode option
     #[arg(long, value_name = "GRAPHICS")]
     pub graphics: Option<bool>,
+    
+    /// 🌀 Portal Mode
+    ///
+    #[arg(long, value_name = "PORTAL")]
+    pub portal: Option<bool>,
 }

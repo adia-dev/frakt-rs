@@ -1,3 +1,5 @@
+pub mod portal;
+
 use std::{
     mem::size_of,
     net::SocketAddr,
@@ -27,7 +29,10 @@ use shared::{
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::{self, Sender},
+    task::JoinHandle,
 };
+
+use crate::portal::run_portal;
 
 pub async fn run_graphics_server(config: &ServerConfig) {
     match execute_server(config).await {
@@ -60,6 +65,12 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
     //         _ = tokio::time::sleep(Duration::from_secs(5));
     //     }
     // });
+
+    if config.portal {
+        tokio::spawn(async move {
+            _ = run_portal().await;
+        });
+    }
 
     let _ = tokio::join!(connection_handler, graphics_handler);
 
