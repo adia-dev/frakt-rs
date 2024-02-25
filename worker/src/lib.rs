@@ -30,10 +30,10 @@ pub async fn run_worker(worker: Worker) {
                     retries += 1;
                     // TODO: Implement a more robust error handling mechanism
                     // TODO: put the max_retries in a config file
-                    // if retries >= max_retries {
-                    //     error!("Worker killed due to multiple errors encountered in a row");
-                    //     // break;
-                    // }
+                    if retries >= max_retries {
+                        error!("Worker killed due to multiple errors encountered in a row");
+                        break;
+                    }
                     error!(
                         "Worker encountered an error: {}, retry {}/{}",
                         e, retries, max_retries

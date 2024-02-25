@@ -163,8 +163,9 @@ async fn process_fragment_result(
     info!("Processing received FragmentResult.");
     trace!("FragmentResult details: {:?}", result);
 
-    // Skip the first 16 bytes of the data
-    let data = &data[16..];
+    // Skip the offset bytes of the data
+    let offset = result.id.offset;
+    let data = &data[(offset as usize)..];
     if data.len() % size_of::<PixelIntensity>() != 0 {
         error!("Data size is not aligned with PixelIntensity size.");
         return;
