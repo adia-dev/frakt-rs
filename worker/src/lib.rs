@@ -42,7 +42,7 @@ pub async fn run_worker(worker: Worker) {
             }
 
             // Add a short delay to prevent a tight loop in case of repeated errors
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(300)).await;
         }
     });
 

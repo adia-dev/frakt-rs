@@ -7,7 +7,7 @@ use shared::{
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use super::fragment_processor::WsFragmentProcessor;
+use super::processors::fragment_processor::WsFragmentProcessor;
 
 pub async fn websocket_route(
     req: HttpRequest,
@@ -17,8 +17,8 @@ pub async fn websocket_route(
 ) -> Result<HttpResponse, Error> {
     ws::start(
         WsFragmentProcessor {
-            tx: tx.get_ref().clone(),
-            rx: rx.get_ref().clone(),
+            fragment_request_tx: tx.get_ref().clone(),
+            rendering_data_rx: rx.get_ref().clone(),
         },
         &req,
         stream,

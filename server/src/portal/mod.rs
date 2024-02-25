@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use actix_web::{web, App, HttpServer};
+use actix_web::{web::{self, Data}, App, HttpServer};
 use log::info;
 use shared::{
     dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest,
@@ -20,8 +20,8 @@ pub async fn run_portal(
 
     let server = HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(tx.clone()))
-            .app_data(web::Data::new(rx.clone()))
+            .app_data(Data::new(tx.clone()))
+            .app_data(Data::new(rx.clone()))
             .route("/ws/", web::get().to(websocket_route))
     })
     .bind("127.0.0.1:8686")?

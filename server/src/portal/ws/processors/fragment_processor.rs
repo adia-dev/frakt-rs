@@ -6,23 +6,23 @@ use shared::{
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use super::messages::rendering_data::RenderingDataMessage;
+use crate::portal::ws::messages::PortalMessage;
 
 pub struct WsFragmentProcessor {
-    pub tx: Sender<FragmentRequest>,
-    pub rx: Arc<Mutex<Receiver<RenderingData>>>,
+    pub fragment_request_tx: Sender<FragmentRequest>,
+    pub rendering_data_rx: Arc<Mutex<Receiver<RenderingData>>>,
 }
 
 impl WsFragmentProcessor {
     fn start_polling_rendering_data(&self, ctx: &mut <Self as Actor>::Context) {
-        let rx = self.rx.clone();
+        let rx = self.rendering_data_rx.clone();
         let actor_address = ctx.address();
 
-        ctx.run_interval(std::time::Duration::from_secs(1), move |_, _| {
+        ctx.run_interval(std::time::Duration::from_millis(100), move |_, _| {
             let mut rx_lock = rx.lock().unwrap();
             if let Ok(rendering_data) = rx_lock.try_recv() {
                 // Send the rendering data to the actor
-                actor_address.do_send(RenderingDataMessage(rendering_data));
+                actor_address.do_send(PortalMessage::RenderingDataMessage(rendering_data));
             }
         });
     }
@@ -33,7 +33,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsFragmentProcess
         if let Ok(ws::Message::Text(text)) = msg {
             match serde_json::from_str::<FragmentRequest>(&text) {
                 Ok(fragment_request) => {
-                    let tx = self.tx.clone();
+                    let tx = self.fragment_request_tx.clone();
                     ctx.text(format!("Fragment Request sent: {:?}", fragment_request));
                     tokio::spawn(async move {
                         let _ = tx.send(fragment_request).await;

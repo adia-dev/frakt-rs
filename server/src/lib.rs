@@ -47,14 +47,14 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
 
     let (render_tx, render_rx) = mpsc::channel::<RenderingData>(32);
     let (portal_request_tx, mut portal_request_rx) = mpsc::channel::<FragmentRequest>(32);
-    let (portal_data_tx, portal_data_rx) = mpsc::channel::<RenderingData>(32);
+    let (portal_tx, portal_rx) = mpsc::channel::<RenderingData>(32);
     let server = create_server(config, &render_tx);
 
     let connection_handler = tokio::spawn(handle_connections(
         listener,
         server.clone(),
         render_tx.clone(),
-        portal_data_tx.clone(),
+        portal_tx.clone(),
     ));
     let graphics_handler = launch_graphics_engine(server.clone(), render_rx);
 
@@ -70,7 +70,7 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
 
     if config.portal {
         tokio::spawn(async move {
-            _ = run_portal(portal_request_tx, portal_data_rx).await;
+            _ = run_portal(portal_request_tx, portal_rx).await;
         });
         tokio::spawn(async move {
             while let Some(request) = portal_request_rx.recv().await {
@@ -190,7 +190,7 @@ async fn process_fragment_result(
         if let Some(worker) = server.get_worker(&socket_addr) {
             worker.name.to_string()
         } else {
-            "[unknown worker]".to_string()
+            format!("worker-{}", uuid::Uuid::new_v4())
         }
     };
 
