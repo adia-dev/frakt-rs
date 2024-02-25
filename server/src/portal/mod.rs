@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use actix_web::{web::{self, Data}, App, HttpServer};
 use log::info;
 use shared::{
-    dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest,
+    dtos::{portal_dto::PortalDto, rendering_data::RenderingData}, models::fragments::fragment_request::FragmentRequest,
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -13,7 +13,7 @@ pub mod ws;
 
 pub async fn run_portal(
     tx: Sender<FragmentRequest>,
-    rx: Receiver<RenderingData>,
+    rx: Receiver<PortalDto>,
 ) -> std::io::Result<()> {
     info!("🌀 Starting the Portal websocket server");
     let rx = Arc::new(Mutex::new(rx));

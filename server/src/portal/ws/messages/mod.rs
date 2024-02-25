@@ -1,28 +1,28 @@
 use actix::{Handler, Message};
+use log::info;
 use serde_json::json;
-use shared::dtos::{rendering_data::RenderingData, server_dto::ServerDto};
+use shared::dtos::{portal_dto::PortalDto, rendering_data::RenderingData, server_dto::ServerDto};
 
-use super::processors::fragment_processor::WsFragmentProcessor;
+use super::processors::fragment_processor::WsMessageProcessor;
 
 #[derive(Message)]
 #[rtype(result = "()")]
-pub enum PortalMessage {
-    SyncServerMessage(ServerDto),
-    RenderingDataMessage(RenderingData),
-}
+pub struct PortalMessage(pub PortalDto);
 
-impl Handler<PortalMessage> for WsFragmentProcessor {
+impl Handler<PortalMessage> for WsMessageProcessor {
     type Result = ();
 
     fn handle(&mut self, msg: PortalMessage, ctx: &mut Self::Context) {
-        let (message_type, message_payload) = match msg {
-            PortalMessage::SyncServerMessage(server) => {
+        let (message_type, message_payload) = match msg.0 {
+            PortalDto::Server(server) => {
                 let payload = serde_json::to_string(&server)
                     .unwrap_or_else(|_| "Error serializing server data".to_string());
 
+                info!("🌀 Server some sync data to the good ol' websocket client");
+
                 ("server_sync", payload)
             }
-            PortalMessage::RenderingDataMessage(rendering_data) => {
+            PortalDto::RenderindData(rendering_data) => {
                 let payload = serde_json::to_string(&rendering_data)
                     .unwrap_or_else(|_| "Error serializing rendering data".to_string());
 

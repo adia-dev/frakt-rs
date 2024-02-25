@@ -1,34 +1,34 @@
 use actix::{Actor, AsyncContext, StreamHandler};
 use actix_web_actors::ws::{self};
 use shared::{
-    dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest,
+    dtos::{portal_dto::PortalDto, rendering_data::RenderingData}, models::fragments::fragment_request::FragmentRequest,
 };
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::portal::ws::messages::PortalMessage;
 
-pub struct WsFragmentProcessor {
+pub struct WsMessageProcessor {
     pub fragment_request_tx: Sender<FragmentRequest>,
-    pub rendering_data_rx: Arc<Mutex<Receiver<RenderingData>>>,
+    pub portal_dto_rx: Arc<Mutex<Receiver<PortalDto>>>,
 }
 
-impl WsFragmentProcessor {
+impl WsMessageProcessor {
     fn start_polling_rendering_data(&self, ctx: &mut <Self as Actor>::Context) {
-        let rx = self.rendering_data_rx.clone();
+        let rx = self.portal_dto_rx.clone();
         let actor_address = ctx.address();
 
         ctx.run_interval(std::time::Duration::from_millis(100), move |_, _| {
             let mut rx_lock = rx.lock().unwrap();
-            if let Ok(rendering_data) = rx_lock.try_recv() {
+            if let Ok(dto) = rx_lock.try_recv() {
                 // Send the rendering data to the actor
-                actor_address.do_send(PortalMessage::RenderingDataMessage(rendering_data));
+                actor_address.do_send(PortalMessage(dto));
             }
         });
     }
 }
 
-impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsFragmentProcessor {
+impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsMessageProcessor {
     fn handle(&mut self, msg: Result<ws::Message, ws::ProtocolError>, ctx: &mut Self::Context) {
         if let Ok(ws::Message::Text(text)) = msg {
             match serde_json::from_str::<FragmentRequest>(&text) {
@@ -45,7 +45,7 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsFragmentProcess
     }
 }
 
-impl Actor for WsFragmentProcessor {
+impl Actor for WsMessageProcessor {
     type Context = ws::WebsocketContext<Self>;
 
     fn started(&mut self, ctx: &mut Self::Context) {

@@ -3,22 +3,22 @@ use std::sync::{Arc, Mutex};
 use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 use shared::{
-    dtos::rendering_data::RenderingData, models::fragments::fragment_request::FragmentRequest,
+    dtos::{portal_dto::PortalDto, rendering_data::RenderingData}, models::fragments::fragment_request::FragmentRequest,
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
-use super::processors::fragment_processor::WsFragmentProcessor;
+use super::processors::fragment_processor::WsMessageProcessor;
 
 pub async fn websocket_route(
     req: HttpRequest,
     stream: web::Payload,
     tx: web::Data<Sender<FragmentRequest>>,
-    rx: web::Data<Arc<Mutex<Receiver<RenderingData>>>>,
+    rx: web::Data<Arc<Mutex<Receiver<PortalDto>>>>,
 ) -> Result<HttpResponse, Error> {
     ws::start(
-        WsFragmentProcessor {
+        WsMessageProcessor {
             fragment_request_tx: tx.get_ref().clone(),
-            rendering_data_rx: rx.get_ref().clone(),
+            portal_dto_rx: rx.get_ref().clone(),
         },
         &req,
         stream,

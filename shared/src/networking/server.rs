@@ -1,12 +1,13 @@
 use std::{collections::HashMap, net::SocketAddr};
 
 use complex_rs::complex::Complex;
+use log::info;
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
 
 use crate::{
-    dtos::rendering_data::RenderingData,
+    dtos::{portal_dto::PortalDto, rendering_data::RenderingData, server_dto::ServerDto},
     models::{
         fractal::{
             fractal_descriptor::FractalDescriptor, iterated_sin_z::IteratedSinZ, julia::Julia,
@@ -66,7 +67,8 @@ impl ServerConfig {
 #[derive(Clone, Debug)]
 pub struct Server {
     pub config: ServerConfig,
-    pub render_tx: Sender<RenderingData>,
+    pub render_tx: Option<Sender<RenderingData>>,
+    pub portal_tx: Option<Sender<PortalDto>>,
     pub tiles: Vec<Range>,
     pub tasks_queue: Vec<FragmentTask>,
     pub range: Range,
@@ -76,7 +78,11 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(config: ServerConfig, render_tx: Sender<RenderingData>) -> Self {
+    pub fn new(
+        config: ServerConfig,
+        render_tx: Option<Sender<RenderingData>>,
+        portal_tx: Option<Sender<PortalDto>>,
+    ) -> Self {
         let range = config.range;
         let workers: HashMap<SocketAddr, Worker> = HashMap::new();
         let tasks_queue = Vec::new();
@@ -108,6 +114,7 @@ impl Server {
         Self {
             config,
             render_tx,
+            portal_tx,
             tiles,
             tasks_queue,
             range,
@@ -165,6 +172,13 @@ impl Server {
         self.tiles = Server::generate_tiles(&self.range, self.config.tiles);
     }
 
+    pub fn notify_portal(&self) {
+        if let Some(portal_tx) = &self.portal_tx {
+            info!("Sending the server to the websocky");
+            _ = portal_tx.try_send(PortalDto::Server(ServerDto::from_server(self)))
+        }
+    }
+
     pub fn move_right(&mut self) {
         self._move(self.config.speed, 0.0);
     }
@@ -194,8 +208,11 @@ impl Server {
         self.range.max.y += dy;
 
         self.regenerate_tiles();
+        self.notify_portal();
     }
 
+    // BUG: this is currenlty only zooming in
+    // Even when pressed on `-`
     pub fn zoom(&mut self, factor: f64) {
         let tile_width = (self.range.max.x - self.range.min.x) / self.config.tiles as f64;
         let tile_height = (self.range.max.y - self.range.min.y) / self.config.tiles as f64;
@@ -209,6 +226,7 @@ impl Server {
         self.range.max.y -= dy;
 
         self.regenerate_tiles();
+        self.notify_portal();
     }
 
     pub fn get_random_tile(&mut self) -> Option<Range> {
