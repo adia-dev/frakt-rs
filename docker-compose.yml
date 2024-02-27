@@ -1,0 +1,43 @@
+version: "3.8"
+
+services:
+  server:
+    image: frakt
+    command: "cli --log-level debug server --address server --portal=true --width 800 --height 800"
+    ports:
+      - "8787:8787"
+      - "8686:8686"
+    env_file:
+      - .env
+    networks:
+      - frakt-network
+    volumes:
+      - server-data:/var/lib/frakt/server
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://server:8686/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  workers:
+    image: frakt
+    command: "cli --log-level debug worker --name 'docker' --count 5 --address server --port 8787"
+    env_file:
+      - .env
+    networks:
+      - frakt-network
+    depends_on:
+      - server
+    volumes:
+      - workers-data:/var/lib/frakt/workers
+    deploy:
+      mode: replicated
+      replicas: 1
+
+networks:
+  frakt-network:
+    driver: bridge
+
+volumes:
+  server-data:
+  workers-data:

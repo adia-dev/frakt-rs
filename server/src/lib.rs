@@ -1,6 +1,7 @@
 pub mod portal;
 
 use std::{
+    future,
     mem::size_of,
     net::SocketAddr,
     sync::{
@@ -94,16 +95,11 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
         render_tx.clone(),
         portal_tx.clone(),
     ));
-    let graphics_handler = if config.graphics {
+
+    if config.graphics {
         let server = server.clone();
-        tokio::spawn(async move {
-            _ = launch_graphics_engine(server, render_rx);
-        })
-    } else {
-        tokio::spawn(async move {
-            info!("Started without graphics engine");
-        })
-    };
+        _ = launch_graphics_engine(server, render_rx);
+    }
 
     if config.portal {
         tokio::spawn(run_portal(portal_request_tx, portal_rx));
@@ -115,7 +111,7 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
         });
     }
 
-    let _ = tokio::join!(connection_handler, graphics_handler);
+    let _ = tokio::join!(connection_handler);
 
     Ok(())
 }
@@ -248,6 +244,8 @@ async fn process_fragment_result(
     } else {
         info!("🌀 Sent rendering data to the portal");
     }
+
+    server.lock().unwrap().notify_portal();
 
     if let Err(e) = render_tx.send(rendering_data).await {
         error!("Failed to send rendering data: {}", e);

@@ -1,8 +1,12 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    env,
+    sync::{Arc, Mutex},
+};
 
 use actix_web::{
+    http::StatusCode,
     web::{self, Data},
-    App, HttpServer,
+    App, HttpResponse, HttpServer, Responder,
 };
 use log::info;
 use shared::{
@@ -12,6 +16,10 @@ use shared::{
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::portal::ws::handlers::websocket_route;
+
+pub async fn health() -> impl Responder {
+    HttpResponse::new(StatusCode::OK)
+}
 
 pub mod ws;
 
@@ -32,17 +40,31 @@ pub async fn run_portal(
     tx: Sender<FragmentRequest>,
     rx: Receiver<PortalDto>,
 ) -> std::io::Result<()> {
-    info!("🌀 Starting the Portal websocket server");
     let rx = Arc::new(Mutex::new(rx));
+
+    let host =
+        env::var("PORTAL_HOST").expect("Please make sure a `PORTAL_HOST` env variable is setup.");
+    let port: u16 = env::var("PORTAL_PORT")
+        .expect("Please make sure a `PORTAL_PORT` env variable is setup.")
+        .parse()
+        .expect("Please make sure the `PORTAL_PORT` env variable is a valid integer");
 
     let server = HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(tx.clone()))
             .app_data(web::Data::new(rx.clone()))
+            .route("/health", web::get().to(health))
+            // TODO: refactor this disgusting ass code
+            // .route("/move-right", web::get().to(move_right))
             .route("/ws/", web::get().to(websocket_route))
     })
-    .bind("127.0.0.1:8686")?
+    .bind((host.as_str(), port))?
     .run();
+
+    info!(
+        "🌀 Starting the Portal websocket server at {}:{}",
+        host, port
+    );
 
     let server_handle = tokio::spawn(async move {
         if let Err(e) = server.await {
