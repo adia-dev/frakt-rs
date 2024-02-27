@@ -3,7 +3,10 @@ pub mod portal;
 use std::{
     mem::size_of,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
 };
 
 use log::{debug, error, info, trace};
@@ -33,11 +36,46 @@ use tokio::{
 
 use crate::portal::run_portal;
 
-pub async fn run_graphics_server(config: &ServerConfig) {
-    match execute_server(config).await {
-        Ok(_) => info!("Server shut down gracefully."),
-        Err(e) => error!("Server encountered an error: {}", e),
-    }
+/// Executes the main server loop for handling connections and processing graphics if configured
+/// that way.
+///
+/// This function initializes the TCP server, sets up channel communications for rendering data and portal interactions,
+/// and spawns tasks for handling incoming connections, rendering graphics, and processing portal requests.
+///
+/// # Arguments
+///
+/// * `config` - Configuration settings for the server.
+///
+/// # Returns
+///
+/// A `NetworkingResult<()>` indicating success or error in server execution.
+pub async fn run_server(config: &ServerConfig) {
+    run_wrapper(&config).await;
+}
+
+async fn run_wrapper(config: &ServerConfig) {
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })
+    .expect("Error setting Ctrl-C handler");
+
+    let config = config.clone();
+    tokio::spawn(async move {
+        match execute_server(&config).await {
+            Ok(_) => info!("Server shut down gracefully."),
+            Err(e) => error!("Server encountered an error: {}", e),
+        }
+    });
+
+    // Wait for the Ctrl+C signal
+    while running.load(Ordering::SeqCst) {}
+
+    info!("Shutting down gracefully...");
+    info!("~bye~");
+    // TODO: here maybe save the state or some kind of data somewhere
 }
 
 async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
@@ -56,25 +94,22 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
         render_tx.clone(),
         portal_tx.clone(),
     ));
-    let graphics_handler = launch_graphics_engine(server.clone(), render_rx);
-
-    // tokio::spawn(async move {
-    //     loop {
-    //         let server = server.clone();
-    //         let server = server.lock().unwrap();
-    //         debug!("{:#?}", server.workers);
-
-    //         _ = tokio::time::sleep(Duration::from_secs(5));
-    //     }
-    // });
+    let graphics_handler = if config.graphics {
+        let server = server.clone();
+        tokio::spawn(async move {
+            _ = launch_graphics_engine(server, render_rx);
+        })
+    } else {
+        tokio::spawn(async move {
+            info!("Started without graphics engine");
+        })
+    };
 
     if config.portal {
-        tokio::spawn(async move {
-            _ = run_portal(portal_request_tx, portal_rx).await;
-        });
+        tokio::spawn(run_portal(portal_request_tx, portal_rx));
+
         tokio::spawn(async move {
             while let Some(request) = portal_request_rx.recv().await {
-                debug!("Processing FragmentRequest.");
                 process_portal_fragment_request(request, server.clone()).await;
             }
         });

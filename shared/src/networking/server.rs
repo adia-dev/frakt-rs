@@ -34,6 +34,7 @@ pub struct ServerConfig {
     pub tiles: u32,
     pub range: Range,
     pub speed: f64,
+    pub graphics: bool,
     pub portal: bool,
 }
 
@@ -44,6 +45,7 @@ impl ServerConfig {
         width: u32,
         height: u32,
         tiles: u32,
+        graphics: bool,
         portal: bool,
     ) -> Self {
         let min = Point::new(-1.2, -1.2);
@@ -59,6 +61,7 @@ impl ServerConfig {
             tiles,
             range,
             speed,
+            graphics,
             portal,
         }
     }

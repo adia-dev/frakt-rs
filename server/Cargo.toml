@@ -23,3 +23,4 @@ actix-cors = "0.7.0"
 actix = "0.13.3"
 actix-web-actors = "4.3.0"
 uuid = { version = "1.7.0", features = ["v4"] }
+ctrlc = "3.4.2"
