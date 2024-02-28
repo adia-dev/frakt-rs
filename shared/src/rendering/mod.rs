@@ -30,6 +30,7 @@ struct World {
     height: u32,
     rendering_data_shards: SharedRenderingData,
     palette: PaletteHandler,
+    iterations: Vec<f64>,
 }
 
 fn initialize_shared_data(shard_count: usize) -> SharedRenderingData {
@@ -54,12 +55,14 @@ pub async fn launch_graphics_engine(
 
     // TODO: decomission this sharded rendering data
     let rendering_data = initialize_shared_data(1);
+    let iterations: Vec<f64> = vec![0.0; (width * height) as usize];
     let mut graphics_world = World {
         server,
         width,
         height,
         rendering_data_shards: rendering_data.clone(),
         palette: PaletteHandler::new(),
+        iterations,
     };
 
     tokio::spawn(async move {
@@ -139,12 +142,18 @@ pub async fn launch_graphics_engine(
 
             if input_helper.key_pressed(VirtualKeyCode::L) {
                 graphics_world.cycle_color_palette_forward();
-                window.request_redraw();
+                graphics_world.re_render(pixels.frame_mut());
+                if pixels.render().is_err() {
+                    *control_flow = ControlFlow::Exit;
+                }
             }
 
             if input_helper.key_pressed(VirtualKeyCode::J) {
                 graphics_world.cycle_color_palette_backward();
-                window.request_redraw();
+                graphics_world.re_render(pixels.frame_mut());
+                if pixels.render().is_err() {
+                    *control_flow = ControlFlow::Exit;
+                }
             }
 
             if let Some(size) = input_helper.window_resized() {
@@ -164,28 +173,34 @@ impl World {
 
     fn cycle_color_palette_forward(&mut self) {
         self.palette.cycle_palette_forward();
-        self.server.lock().unwrap().regenerate_tiles();
+        // self.server.lock().unwrap().regenerate_tiles();
     }
 
     fn cycle_color_palette_backward(&mut self) {
         self.palette.cycle_palette_backward();
-        self.server.lock().unwrap().regenerate_tiles();
+        // self.server.lock().unwrap().regenerate_tiles();
     }
 
-    fn render(&self, frame_buffer: &mut [u8]) {
+    fn re_render(&self, frame_buffer: &mut [u8]) {
+        for y in 0..self.width {
+            for x in 0..self.height {
+                let t = self.iterations[(y as u32 * self.width + x as u32) as usize];
+                self.draw_pixel(frame_buffer, self.width, x as u32, y as u32, t);
+            }
+        }
+    }
+
+    fn render(&mut self, frame_buffer: &mut [u8]) {
         for shard in self.rendering_data_shards.iter() {
             if let Ok(mut data_lock) = shard.lock() {
                 if let Some(render_data) = data_lock.take() {
                     // Safely take the value, replacing it with None
-                    info!("Rendering result: {:?}", render_data.result);
                     let result = render_data.result;
-
                     let (start_x, start_y) = self.start_point(result.range);
-                    info!("Drawing fragment at ({}, {})", start_x, start_y);
-
                     for y in 0..result.resolution.ny {
                         for x in 0..result.resolution.nx {
                             let t = render_data.iterations[(x + y * result.resolution.ny) as usize];
+                            self.iterations[((start_y + (y as u32)) * self.width + (start_x + x as u32)) as usize] = t;
                             self.draw_pixel(
                                 frame_buffer,
                                 self.width,
