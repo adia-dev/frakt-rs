@@ -1,7 +1,7 @@
 use std::{collections::HashMap, net::SocketAddr};
 
 use complex_rs::complex::Complex;
-use log::info;
+use log::{debug, info};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc::Sender;
@@ -132,6 +132,15 @@ impl Server {
         self.regenerate_tiles();
     }
 
+    pub fn previous_fractal(&mut self) {
+        self.current_fractal = if self.current_fractal == 0 {
+            self.fractals.len() - 1
+        } else {
+            self.current_fractal - 1
+        };
+        self.regenerate_tiles();
+    }
+
     pub fn register_worker(&mut self, addr: SocketAddr, worker: Worker) {
         self.workers.insert(addr, worker);
     }
@@ -173,6 +182,7 @@ impl Server {
 
     pub fn regenerate_tiles(&mut self) {
         self.tiles = Server::generate_tiles(&self.range, self.config.tiles);
+        debug!("{:?}", self.tiles);
     }
 
     pub fn notify_portal(&self) {

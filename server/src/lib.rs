@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 
 use shared::{
     dtos::{portal_dto::PortalDto, rendering_data::RenderingData},
@@ -88,8 +88,6 @@ pub async fn run_wrapper(config: &ServerConfig) {
     // TODO: here maybe save the state or some kind of data somewhere
 }
 
-// src/core/server.rs
-
 use tokio::sync::broadcast;
 
 async fn execute_server(
@@ -100,11 +98,9 @@ async fn execute_server(
     let listener = initialize_server(&server_address).await?;
     info!("Server is listening on {}", server_address);
 
-    // Clone the transmitter for the different parts of the system that need to listen for shutdown
     let render_shutdown_tx = shutdown_tx.clone();
     let connection_handler_shutdown_tx = shutdown_tx.clone();
 
-    // Listener for shutdown signal
     let mut shutdown_signal = shutdown_tx.subscribe();
 
     let (render_tx, render_rx) = mpsc::channel::<RenderingData>(32);
@@ -232,7 +228,7 @@ async fn handle_connection(
     trace!("Raw message: {:?}", raw_message);
 
     if let Ok(fragment_result) = FragmentResult::from_json(&raw_message.json_message) {
-        debug!("Processing FragmentResult.");
+        debug!("📐 Processing FragmentResult.");
         process_fragment_result(
             fragment_result,
             &raw_message.data,
@@ -243,7 +239,7 @@ async fn handle_connection(
         )
         .await;
     } else if let Ok(request) = FragmentRequest::from_json(&raw_message.json_message) {
-        debug!("Processing FragmentRequest.");
+        debug!("🤌 Processing FragmentRequest.");
         process_fragment_request(request, server.clone(), &mut socket, socket_addr).await;
     }
 }
@@ -297,24 +293,38 @@ async fn process_fragment_result(
         worker,
     };
 
-    if let Err(e) = portal_tx
-        .send(PortalDto::RenderindData(rendering_data.clone()))
-        .await
+    let (graphics_enabled, portal_enabled) = 
     {
-        error!("Failed to send rendering data to the portal: {}", e);
-    } else {
-        info!("🌀 Sent rendering data to the portal");
+        let server = server.lock().unwrap();
+        (server.config.graphics, server.config.portal)
+    };
+
+    if graphics_enabled {
+        if let Err(e) = render_tx.send(rendering_data.clone()).await {
+            error!("Failed to send rendering data: {}", e);
+        } else {
+            info!("🎨 Sent rendering data to the rendering window");
+        }
     }
 
-    server.lock().unwrap().notify_portal();
-
-    if let Err(e) = render_tx.send(rendering_data).await {
-        error!("Failed to send rendering data: {}", e);
+    if portal_enabled {
+        match portal_tx
+            .send(PortalDto::RenderindData(rendering_data))
+            .await
+        {
+            Err(e) => {
+                error!("Failed to send rendering data to the portal: {}", e);
+            }
+            Ok(_) => {
+                info!("🌀 Sent rendering data to the portal");
+                server.lock().unwrap().notify_portal();
+            }
+        }
     }
 }
 
 async fn process_portal_fragment_request(request: FragmentRequest, server: Arc<Mutex<Server>>) {
-    info!("Received FragmentRequest from the portal");
+    info!("🤌🌀 Received FragmentRequest from the portal");
     trace!("FragmentRequest details: {:?}", request);
     let mut server = server.lock().unwrap();
 
@@ -376,7 +386,7 @@ async fn send_fragment_task(
     let task_json = serde_json::to_string(&serialized_task)?;
     let signature = [0u8; 16]; // Placeholder for actual signature logic
 
-    info!("Sending fragment task to worker: {}", worker_name);
+    info!("📋 Sending fragment task to worker: {}", worker_name);
     send_message(socket, task_json.as_bytes(), Some(&signature))
         .await
         .map_err(Into::into)

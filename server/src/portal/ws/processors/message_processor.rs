@@ -1,6 +1,9 @@
 use actix::{Actor, AsyncContext, StreamHandler};
 use actix_web_actors::ws::{self};
-use shared::{dtos::portal_dto::PortalDto, models::fragments::fragment_request::FragmentRequest};
+use shared::{
+    dtos::portal_dto::PortalDto, models::fragments::fragment_request::FragmentRequest,
+    networking::server::Server,
+};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -9,6 +12,7 @@ use crate::portal::ws::messages::PortalMessage;
 pub struct WsMessageProcessor {
     pub fragment_request_tx: Sender<FragmentRequest>,
     pub portal_dto_rx: Arc<Mutex<Receiver<PortalDto>>>,
+    pub server: Arc<Mutex<Server>>,
 }
 
 impl WsMessageProcessor {
@@ -19,7 +23,6 @@ impl WsMessageProcessor {
         ctx.run_interval(std::time::Duration::from_millis(100), move |_, _| {
             let mut rx_lock = rx.lock().unwrap();
             if let Ok(dto) = rx_lock.try_recv() {
-                // Send the rendering data to the actor
                 actor_address.do_send(PortalMessage(dto));
             }
         });
@@ -35,6 +38,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for WsMessageProcesso
                     ctx.text(format!("Fragment Request sent: {:?}", fragment_request));
                     tokio::spawn(async move {
                         let _ = tx.send(fragment_request).await;
+                    });
+
+                    let server = self.server.clone();
+                    tokio::spawn(async move {
+                        let _ = server.lock().unwrap().notify_portal();
                     });
                 }
                 Err(_) => ctx.text("Error parsing FragmentRequest"),

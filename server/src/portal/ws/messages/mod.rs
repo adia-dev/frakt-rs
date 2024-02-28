@@ -3,7 +3,7 @@ use log::info;
 use serde_json::json;
 use shared::dtos::portal_dto::PortalDto;
 
-use super::processors::fragment_processor::WsMessageProcessor;
+use super::processors::message_processor::WsMessageProcessor;
 
 #[derive(Message)]
 #[rtype(result = "()")]

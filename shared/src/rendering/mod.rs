@@ -3,7 +3,7 @@
 
 pub mod color;
 
-use log::info;
+use log::{info, warn};
 use pixels::{Error, Pixels, SurfaceTexture};
 use tokio::sync::broadcast;
 
@@ -52,7 +52,8 @@ pub async fn launch_graphics_engine(
         (width, height)
     };
 
-    let rendering_data = initialize_shared_data(10);
+    // TODO: decomission this sharded rendering data
+    let rendering_data = initialize_shared_data(1);
     let mut graphics_world = World {
         server,
         width,
@@ -163,12 +164,12 @@ impl World {
 
     fn cycle_color_palette_forward(&mut self) {
         self.palette.cycle_palette_forward();
-        // self.server.lock().unwrap().regenerate_tiles();
+        self.server.lock().unwrap().regenerate_tiles();
     }
 
     fn cycle_color_palette_backward(&mut self) {
         self.palette.cycle_palette_backward();
-        // self.server.lock().unwrap().regenerate_tiles();
+        self.server.lock().unwrap().regenerate_tiles();
     }
 
     fn render(&self, frame_buffer: &mut [u8]) {
