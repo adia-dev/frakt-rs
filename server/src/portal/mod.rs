@@ -3,15 +3,15 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use actix_cors::Cors;
 use actix_web::{
-    http::StatusCode,
-    web::{self, Data},
-    App, HttpResponse, HttpServer, Responder,
+    http::StatusCode, middleware::Logger, web, App, HttpResponse, HttpServer, Responder,
 };
 use log::info;
+use serde::{Deserialize, Serialize};
 use shared::{
-    dtos::{portal_dto::PortalDto, rendering_data::RenderingData},
-    models::fragments::fragment_request::FragmentRequest,
+    dtos::portal_dto::PortalDto, models::fragments::fragment_request::FragmentRequest,
+    networking::server::Server,
 };
 use tokio::sync::mpsc::{Receiver, Sender};
 
@@ -19,6 +19,45 @@ use crate::portal::ws::handlers::websocket_route;
 
 pub async fn health() -> impl Responder {
     HttpResponse::new(StatusCode::OK)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DirectionQuery {
+    direction: String,
+}
+
+pub async fn cycle_fractal(
+    query: web::Query<DirectionQuery>, // Use Query extractor for query parameters
+    server: web::Data<Arc<Mutex<Server>>>,
+) -> impl Responder {
+    let mut server = server.lock().unwrap();
+    match query.direction.to_lowercase().as_str() {
+        "top" => server.cycle_fractal(),
+        "left" => server.cycle_fractal(),
+        _ => {
+            server.cycle_fractal();
+        }
+    }
+
+    HttpResponse::Ok().body(format!("Cycled fractal {:?}", query.direction))
+}
+
+pub async fn move_fractal(
+    query: web::Query<DirectionQuery>, // Use Query extractor for query parameters
+    server: web::Data<Arc<Mutex<Server>>>,
+) -> impl Responder {
+    let mut server = server.lock().unwrap();
+    match query.direction.to_lowercase().as_str() {
+        "top" => server.move_up(),
+        "right" => server.move_right(),
+        "bottom" => server.move_down(),
+        "left" => server.move_left(),
+        _ => {
+            return HttpResponse::BadRequest().body(format!("The direction {} is not supported, please enter one of `top`, `left`, `right`, `bottom`.", query.direction));
+        }
+    }
+
+    HttpResponse::Ok().body(format!("Moved fractal {:?}", query.direction))
 }
 
 pub mod ws;
@@ -39,6 +78,7 @@ pub mod ws;
 pub async fn run_portal(
     tx: Sender<FragmentRequest>,
     rx: Receiver<PortalDto>,
+    server: Arc<Mutex<Server>>,
 ) -> std::io::Result<()> {
     let rx = Arc::new(Mutex::new(rx));
 
@@ -51,11 +91,15 @@ pub async fn run_portal(
 
     let server = HttpServer::new(move || {
         App::new()
+            .wrap(Cors::default())
+            .wrap(Logger::default())
             .app_data(web::Data::new(tx.clone()))
             .app_data(web::Data::new(rx.clone()))
+            .app_data(web::Data::new(server.clone()))
             .route("/health", web::get().to(health))
             // TODO: refactor this disgusting ass code
-            // .route("/move-right", web::get().to(move_right))
+            .route("/fractal/move", web::get().to(move_fractal))
+            .route("/fractal/cycle", web::get().to(cycle_fractal))
             .route("/ws/", web::get().to(websocket_route))
     })
     .bind((host.as_str(), port))?

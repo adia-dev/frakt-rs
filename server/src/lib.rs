@@ -1,7 +1,6 @@
 pub mod portal;
 
 use std::{
-    future,
     mem::size_of,
     net::SocketAddr,
     sync::{
@@ -95,7 +94,7 @@ use tokio::sync::broadcast;
 
 async fn execute_server(
     config: &ServerConfig,
-    mut shutdown_tx: broadcast::Sender<()>,
+    shutdown_tx: broadcast::Sender<()>,
 ) -> NetworkingResult<()> {
     let server_address = format!("{}:{}", config.address, config.port);
     let listener = initialize_server(&server_address).await?;
@@ -122,11 +121,11 @@ async fn execute_server(
     ));
 
     if config.portal {
-        let server_clone = server.clone();
-        tokio::spawn(run_portal(portal_request_tx, portal_rx));
+        let server = server.clone();
+        tokio::spawn(run_portal(portal_request_tx, portal_rx, server.clone()));
         tokio::spawn(async move {
             while let Some(request) = portal_request_rx.recv().await {
-                process_portal_fragment_request(request, server_clone.clone()).await;
+                process_portal_fragment_request(request, server.clone()).await;
             }
         });
     }

@@ -1,8 +1,6 @@
 use actix::{Actor, AsyncContext, StreamHandler};
 use actix_web_actors::ws::{self};
-use shared::{
-    dtos::{portal_dto::PortalDto, rendering_data::RenderingData}, models::fragments::fragment_request::FragmentRequest,
-};
+use shared::{dtos::portal_dto::PortalDto, models::fragments::fragment_request::FragmentRequest};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{Receiver, Sender};
 

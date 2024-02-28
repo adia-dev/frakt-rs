@@ -1,7 +1,7 @@
 use actix::{Handler, Message};
 use log::info;
 use serde_json::json;
-use shared::dtos::{portal_dto::PortalDto, rendering_data::RenderingData, server_dto::ServerDto};
+use shared::dtos::portal_dto::PortalDto;
 
 use super::processors::fragment_processor::WsMessageProcessor;
 
