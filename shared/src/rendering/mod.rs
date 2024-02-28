@@ -5,6 +5,7 @@ pub mod color;
 
 use log::info;
 use pixels::{Error, Pixels, SurfaceTexture};
+use tokio::sync::broadcast;
 
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::Receiver;
@@ -39,6 +40,7 @@ fn initialize_shared_data(shard_count: usize) -> SharedRenderingData {
 pub async fn launch_graphics_engine(
     server: Arc<Mutex<Server>>,
     mut rendering_data_receiver: Receiver<RenderingData>,
+    mut render_shutdown_rx: broadcast::Receiver<()>,
 ) -> Result<(), Error> {
     let event_loop = EventLoop::new();
     let mut input_helper = WinitInputHelper::new();
@@ -91,6 +93,9 @@ pub async fn launch_graphics_engine(
     };
 
     event_loop.run(move |event, _, control_flow| {
+        if let Ok(_) = render_shutdown_rx.try_recv() {
+            *control_flow = ControlFlow::Exit;
+        }
         if let Event::RedrawRequested(_) = event {
             graphics_world.render(pixels.frame_mut());
             if pixels.render().is_err() {
@@ -158,12 +163,12 @@ impl World {
 
     fn cycle_color_palette_forward(&mut self) {
         self.palette.cycle_palette_forward();
-        self.server.lock().unwrap().regenerate_tiles();
+        // self.server.lock().unwrap().regenerate_tiles();
     }
 
     fn cycle_color_palette_backward(&mut self) {
         self.palette.cycle_palette_backward();
-        self.server.lock().unwrap().regenerate_tiles();
+        // self.server.lock().unwrap().regenerate_tiles();
     }
 
     fn render(&self, frame_buffer: &mut [u8]) {

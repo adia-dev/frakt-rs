@@ -32,6 +32,7 @@ use shared::{
 };
 use tokio::{
     net::{TcpListener, TcpStream},
+    signal,
     sync::mpsc::{self, Sender},
 };
 
@@ -54,35 +55,58 @@ pub async fn run_server(config: &ServerConfig) {
     run_wrapper(&config).await;
 }
 
-async fn run_wrapper(config: &ServerConfig) {
+pub async fn run_wrapper(config: &ServerConfig) {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
-    ctrlc::set_handler(move || {
-        r.store(false, Ordering::SeqCst);
-    })
-    .expect("Error setting Ctrl-C handler");
+    {
+        let shutdown_tx = shutdown_tx.clone();
+        ctrlc::set_handler(move || {
+            r.store(false, Ordering::SeqCst);
+            info!("CTRL+C pressed. Shutting down...");
+            _ = shutdown_tx.send(());
+        })
+        .expect("Error setting CTRL+C handler");
+    }
 
-    let config = config.clone();
+    let r = running.clone();
     tokio::spawn(async move {
-        match execute_server(&config).await {
+        signal::ctrl_c().await.expect("Failed to listen for ctrl_c");
+        r.store(false, Ordering::SeqCst);
+    });
+
+    while running.load(Ordering::SeqCst) {
+        let config = config.clone();
+        match execute_server(&config, shutdown_tx.clone()).await {
             Ok(_) => info!("Server shut down gracefully."),
             Err(e) => error!("Server encountered an error: {}", e),
         }
-    });
-
-    // Wait for the Ctrl+C signal
-    while running.load(Ordering::SeqCst) {}
+    }
 
     info!("Shutting down gracefully...");
     info!("~bye~");
     // TODO: here maybe save the state or some kind of data somewhere
 }
 
-async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
+// src/core/server.rs
+
+use tokio::sync::broadcast;
+
+async fn execute_server(
+    config: &ServerConfig,
+    mut shutdown_tx: broadcast::Sender<()>,
+) -> NetworkingResult<()> {
     let server_address = format!("{}:{}", config.address, config.port);
     let listener = initialize_server(&server_address).await?;
     info!("Server is listening on {}", server_address);
+
+    // Clone the transmitter for the different parts of the system that need to listen for shutdown
+    let render_shutdown_tx = shutdown_tx.clone();
+    let connection_handler_shutdown_tx = shutdown_tx.clone();
+
+    // Listener for shutdown signal
+    let mut shutdown_signal = shutdown_tx.subscribe();
 
     let (render_tx, render_rx) = mpsc::channel::<RenderingData>(32);
     let (portal_request_tx, mut portal_request_rx) = mpsc::channel::<FragmentRequest>(32);
@@ -94,24 +118,53 @@ async fn execute_server(config: &ServerConfig) -> NetworkingResult<()> {
         server.clone(),
         render_tx.clone(),
         portal_tx.clone(),
+        connection_handler_shutdown_tx.subscribe(),
     ));
 
-    if config.graphics {
-        let server = server.clone();
-        _ = launch_graphics_engine(server, render_rx);
-    }
-
     if config.portal {
+        let server_clone = server.clone();
         tokio::spawn(run_portal(portal_request_tx, portal_rx));
-
         tokio::spawn(async move {
             while let Some(request) = portal_request_rx.recv().await {
-                process_portal_fragment_request(request, server.clone()).await;
+                process_portal_fragment_request(request, server_clone.clone()).await;
             }
         });
     }
 
-    let _ = tokio::join!(connection_handler);
+    if config.graphics {
+        let graphics_handler =
+            launch_graphics_engine(server, render_rx, render_shutdown_tx.subscribe());
+
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                info!("Ctrl+C signal received. Initiating shutdown...");
+            },
+            _ = shutdown_signal.recv() => {
+                info!("Shutdown signal received. Initiating shutdown...");
+            },
+            _ = connection_handler => {
+                info!("Connection handler shutdown completed.");
+            },
+            _ = graphics_handler => {
+                info!("Graphics handler shutdown completed.");
+            }
+        };
+    } else {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                info!("Ctrl+C signal received. Initiating shutdown...");
+            },
+            _ = shutdown_signal.recv() => {
+                info!("Shutdown signal received. Initiating shutdown...");
+            },
+            _ = connection_handler => {
+                info!("Connection handler shutdown completed.");
+            }
+        };
+    }
+
+    // Signal all components to shutdown
+    let _ = shutdown_tx.send(());
 
     Ok(())
 }
@@ -134,19 +187,28 @@ async fn handle_connections(
     server: Arc<Mutex<Server>>,
     render_tx: Sender<RenderingData>,
     portal_tx: Sender<PortalDto>,
+    mut shutdown_rx: broadcast::Receiver<()>,
 ) {
     info!("Starting to handle incoming connections.");
-    while let Ok((socket, socket_addr)) = listener.accept().await {
-        debug!("Accepted new connection.");
-        let render_tx = render_tx.clone();
-        let portal_tx = portal_tx.clone();
-        tokio::spawn(handle_connection(
-            socket,
-            socket_addr,
-            server.clone(),
-            render_tx,
-            portal_tx,
-        ));
+    loop {
+        tokio::select! {
+            Ok((socket, socket_addr)) = listener.accept() => {
+                debug!("Accepted new connection.");
+                let render_tx = render_tx.clone();
+                let portal_tx = portal_tx.clone();
+                tokio::spawn(handle_connection(
+                    socket,
+                    socket_addr,
+                    server.clone(),
+                    render_tx,
+                    portal_tx,
+                ));
+            },
+            _ = shutdown_rx.recv() => {
+                info!("Shutdown signal received in connection handler.");
+                return;
+            },
+        }
     }
 }
 
