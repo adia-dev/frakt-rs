@@ -9,7 +9,7 @@ use std::{
     },
 };
 
-use log::{debug, error, info, trace, warn};
+use log::{debug, error, info, trace};
 
 use shared::{
     dtos::{portal_dto::PortalDto, rendering_data::RenderingData},
@@ -293,8 +293,7 @@ async fn process_fragment_result(
         worker,
     };
 
-    let (graphics_enabled, portal_enabled) = 
-    {
+    let (graphics_enabled, portal_enabled) = {
         let server = server.lock().unwrap();
         (server.config.graphics, server.config.portal)
     };

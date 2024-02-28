@@ -3,7 +3,7 @@
 
 pub mod color;
 
-use log::{info, warn};
+use log::info;
 use pixels::{Error, Pixels, SurfaceTexture};
 use tokio::sync::broadcast;
 
